@@ -5,7 +5,7 @@ import {
   Day, SessionNumber, RoomName, ROOM_LIST, ScheduleSlot, BookingRequest, getSessionTimes,
 } from '@/lib/types';
 import { getScheduleForDay } from '@/lib/scheduleData';
-import { fetchSlotStatus } from '@/lib/actions';
+import { fetchDayOverrides } from '@/lib/actions';
 
 export interface SlotDisplayData {
   status: 'scheduled' | 'borrowed' | 'available' | 'pending' | 'approved' | 'locked';
@@ -36,25 +36,10 @@ export default function ScheduleTable({
 
   const fetchOverrides = useCallback(async () => {
     setIsLoading(true);
-    const availableSlots = baseSlots.filter((s) => s.status === 'available');
-    const overrides: Record<string, SlotDisplayData> = {};
-
-    const results = await Promise.all(
-      availableSlots.map(async (slot) => {
-        const result = await fetchSlotStatus(slot.day, slot.session, slot.room);
-        return { slot, result };
-      })
-    );
-
-    results.forEach(({ slot, result }) => {
-      if (result.success && result.data) {
-        if (result.data.status !== 'available') {
-          overrides[`${slot.day}-${slot.session}-${slot.room}`] = result.data;
-        }
-      }
-    });
-
-    setSlotOverrides(overrides);
+    const result = await fetchDayOverrides(selectedDay);
+    if (result.success && result.data) {
+      setSlotOverrides(result.data);
+    }
     setIsLoading(false);
   }, [selectedDay, refreshKey]);
 

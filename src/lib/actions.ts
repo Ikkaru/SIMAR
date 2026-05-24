@@ -185,6 +185,42 @@ export async function fetchSlotStatus(
   }
 }
 
+export async function fetchDayOverrides(day: Day): Promise<ActionResult<Record<string, {
+  status: 'scheduled' | 'borrowed' | 'available' | 'pending' | 'approved' | 'locked';
+  courseName: string;
+  booking?: BookingRequest;
+}>>> {
+  try {
+    const overrides: Record<string, any> = {};
+    const baseSlots = getScheduleForDay(day);
+
+    for (const slot of baseSlots) {
+      const locked = isSlotLocked(day, slot.session, slot.room);
+      if (locked) {
+        overrides[`${day}-${slot.session}-${slot.room}`] = { status: 'locked', courseName: locked.note || 'Dikunci' };
+        continue;
+      }
+
+      if (slot.status === 'available') {
+        const bookingState = isSlotBooked(day, slot.session, slot.room);
+        if (bookingState.isApproved) {
+          const bks = getBookingsForSlot(day, slot.session, slot.room);
+          const b = bks.find((x) => x.status === 'approved');
+          overrides[`${day}-${slot.session}-${slot.room}`] = { status: 'approved', courseName: b?.namaMatakuliah || 'Dipinjam', booking: b };
+        } else if (bookingState.isPending) {
+          const bks = getBookingsForSlot(day, slot.session, slot.room);
+          const b = bks.find((x) => x.status === 'pending');
+          overrides[`${day}-${slot.session}-${slot.room}`] = { status: 'pending', courseName: b?.namaMatakuliah || 'Menunggu', booking: b };
+        }
+      }
+    }
+    return { success: true, message: 'OK', data: overrides };
+  } catch (error) {
+    console.error('fetchDayOverrides error:', error);
+    return { success: false, message: 'Error.' };
+  }
+}
+
 // ─── Lock Toggle ─────────────────────────────────────────────
 
 export async function toggleSlotLock(
