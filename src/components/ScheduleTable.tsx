@@ -111,13 +111,13 @@ export default function ScheduleTable({
       if (session === 1) {
         return (
           <td key={room} rowSpan={11} className="p-0 align-middle">
-            <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-4 text-center bg-slate-900 border-x border-slate-800 m-1 rounded-2xl shadow-inner overflow-hidden relative group">
-              <div className="absolute inset-0 bg-[url('/noise.png')] opacity-10 mix-blend-overlay"></div>
+            <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-4 text-center bg-slate-100/60 border border-slate-200 m-1.5 rounded-[1.25rem] shadow-inner overflow-hidden relative group">
+              <div className="absolute inset-0 bg-[url('/noise.png')] opacity-5 mix-blend-overlay"></div>
               <div className="relative z-10 flex flex-col items-center">
-                <span className="text-4xl mb-2 text-slate-600 group-hover:scale-110 transition-transform">🔒</span>
+                <span className="text-4xl mb-2 text-slate-400 group-hover:scale-110 transition-transform">🔒</span>
                 {roomLock.note && (
-                  <div className="px-3 py-2 bg-slate-800/80 rounded-lg border border-slate-700/50 mt-1 max-w-[120px]">
-                    <span className="text-[11px] font-medium text-slate-400 line-clamp-3 leading-snug">{roomLock.note}</span>
+                  <div className="px-3 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-slate-200/60 mt-1 max-w-[120px] shadow-sm">
+                    <span className="text-[11px] font-bold text-slate-500 line-clamp-3 leading-snug">{roomLock.note}</span>
                   </div>
                 )}
               </div>
