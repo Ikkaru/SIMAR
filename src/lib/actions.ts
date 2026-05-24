@@ -281,7 +281,7 @@ export async function getAvailableRoomsSummary(): Promise<
     const dateStrings = DAYS.map(d => dates[d].dateObj.toISOString().split('T')[0]);
     const { data: fullLockedData } = await supabase.from('locked_rooms')
       .select('*')
-      .or(`is_permanent.eq.true,date.in.(${dateStrings.join(',')})`);
+      .or(`is_permanent.eq.true,locked_date.in.(${dateStrings.join(',')})`);
 
     const allLocked = lockedSlotsData || [];
     const allBookings = (bookingsData || []) as BookingRequest[];
@@ -294,7 +294,7 @@ export async function getAvailableRoomsSummary(): Promise<
 
       for (const slot of baseSlots) {
         if (slot.status === 'available') {
-          const isRoomLocked = allFullLocked.some(l => l.room === slot.room && (l.is_permanent || l.date === currentDateStr));
+          const isRoomLocked = allFullLocked.some(l => l.room === slot.room && (l.is_permanent || l.locked_date === currentDateStr));
           if (isRoomLocked) continue;
 
           const isLocked = allLocked.some((l: any) => l.day === day && l.session === slot.session && l.room === slot.room);
