@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Day, SessionNumber, RoomName, ROOM_LIST, ScheduleSlot, BookingRequest, getSessionTimes,
+  Day, SessionNumber, RoomName, ROOM_LIST, ScheduleSlot, BookingRequest, getSessionTimes, isDayPast, getWeekDates
 } from '@/lib/types';
 import { getScheduleForDay } from '@/lib/scheduleData';
-import { fetchDayOverrides } from '@/lib/actions';
+import { fetchDayOverrides, fetchLockedRoomsForDate } from '@/lib/actions';
+import { LockedRoom } from '@/lib/roomLocking';
 
 export interface SlotDisplayData {
   status: 'scheduled' | 'borrowed' | 'available' | 'pending' | 'approved' | 'locked';
@@ -16,36 +17,53 @@ export interface SlotDisplayData {
 interface ScheduleTableProps {
   selectedDay: Day;
   onSlotClick?: (day: Day, session: SessionNumber, room: RoomName, maxDuration: number, data: SlotDisplayData) => void;
+  onRoomHeaderClick?: (room: RoomName, isLocked: boolean, currentNote: string) => void;
   refreshKey?: number;
   adminMode?: boolean;
 }
 
 export default function ScheduleTable({
-  selectedDay, onSlotClick, refreshKey = 0, adminMode = false
+  selectedDay, onSlotClick, onRoomHeaderClick, refreshKey = 0, adminMode = false
 }: ScheduleTableProps) {
   const [slotOverrides, setSlotOverrides] = useState<Record<string, SlotDisplayData>>({});
+  const [lockedRooms, setLockedRooms] = useState<LockedRoom[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPast, setIsPast] = useState(false);
 
   const sessionTimes = getSessionTimes(selectedDay);
   const baseSlots = getScheduleForDay(selectedDay);
+  
+  const dates = useMemo(() => getWeekDates(), []);
+  const currentDateStr = dates[selectedDay]?.dateObj.toISOString().split('T')[0];
 
   const baseSlotMap = new Map<string, ScheduleSlot>();
   baseSlots.forEach((slot) => {
     baseSlotMap.set(`${slot.day}-${slot.session}-${slot.room}`, slot);
   });
 
-  const fetchOverrides = useCallback(async () => {
+  const fetchOverridesAndLocks = useCallback(async () => {
+    if (!currentDateStr) return;
     setIsLoading(true);
-    const result = await fetchDayOverrides(selectedDay);
-    if (result.success && result.data) {
-      setSlotOverrides(result.data);
+    
+    const [overridesRes, locksRes] = await Promise.all([
+      fetchDayOverrides(selectedDay),
+      fetchLockedRoomsForDate(currentDateStr)
+    ]);
+    
+    if (overridesRes.success && overridesRes.data) {
+      setSlotOverrides(overridesRes.data);
     }
+    if (locksRes.success && locksRes.data) {
+      setLockedRooms(locksRes.data);
+    }
+    
     setIsLoading(false);
-  }, [selectedDay, refreshKey]);
+  }, [selectedDay, refreshKey, currentDateStr]);
 
   useEffect(() => {
-    fetchOverrides();
-  }, [fetchOverrides]);
+    fetchOverridesAndLocks();
+    setIsPast(isDayPast(selectedDay));
+  }, [fetchOverridesAndLocks, selectedDay]);
 
   function getSlotDisplay(session: SessionNumber, room: RoomName): SlotDisplayData {
     const key = `${selectedDay}-${session}-${room}`;
@@ -71,22 +89,65 @@ export default function ScheduleTable({
     return Math.max(count, 1);
   }
 
+  function getRoomLock(room: RoomName): LockedRoom | undefined {
+    return lockedRooms.find(r => r.room === room);
+  }
+
   function handleSlotClick(session: SessionNumber, room: RoomName, displayData: SlotDisplayData) {
+    if (getRoomLock(room)) return; // Don't allow click if room is fully locked
+
     if (adminMode && onSlotClick) {
       onSlotClick(selectedDay, session, room, 0, displayData);
-    } else if (displayData.status === 'available' && onSlotClick) {
+    } else if (displayData.status === 'available' && onSlotClick && !isPast) {
       const maxDur = getMaxDuration(session, room);
       onSlotClick(selectedDay, session, room, maxDur, displayData);
     }
   }
 
   function renderSlotCell(session: SessionNumber, room: RoomName) {
+    const roomLock = getRoomLock(room);
+
+    if (roomLock) {
+      if (session === 1) {
+        return (
+          <td key={room} rowSpan={11} className="p-0 align-middle">
+            <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-4 text-center bg-slate-900 border-x border-slate-800 m-1 rounded-2xl shadow-inner overflow-hidden relative group">
+              <div className="absolute inset-0 bg-[url('/noise.png')] opacity-10 mix-blend-overlay"></div>
+              <div className="relative z-10 flex flex-col items-center">
+                <span className="text-4xl mb-2 text-slate-600 group-hover:scale-110 transition-transform">🔒</span>
+                {roomLock.note && (
+                  <div className="px-3 py-2 bg-slate-800/80 rounded-lg border border-slate-700/50 mt-1 max-w-[120px]">
+                    <span className="text-[11px] font-medium text-slate-400 line-clamp-3 leading-snug">{roomLock.note}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </td>
+        );
+      } else {
+        return null;
+      }
+    }
+
     const display = getSlotDisplay(session, room);
     
     // Bento-box style inside the flat table grid
     const baseCell = "flex flex-col items-center justify-center h-full min-h-[80px] p-3 text-[11px] leading-[1.4] text-center transition-all duration-300 ease-out relative break-words rounded-[1.25rem] border mx-1.5 my-1.5";
 
     if (display.status === 'available') {
+      if (isPast && !adminMode) {
+        return (
+          <td key={room} className="p-0 align-middle">
+            <div className={`${baseCell} bg-slate-100/50 border-slate-200 cursor-not-allowed`}>
+              <div className="flex flex-col items-center gap-1.5 text-slate-400">
+                <span className="w-6 h-6 rounded-[8px] bg-slate-200/50 border border-slate-200 shadow-none flex items-center justify-center text-[16px] font-light">-</span>
+                <span className="tracking-widest uppercase text-[9px] font-bold opacity-60">Lewat</span>
+              </div>
+            </div>
+          </td>
+        );
+      }
+
       return (
         <td key={room} className="p-0 align-middle">
           <div
@@ -165,11 +226,24 @@ export default function ScheduleTable({
               <th className="sticky left-0 top-0 z-20 bg-slate-50 text-slate-500 px-4 py-3.5 text-[11px] font-bold tracking-widest uppercase border-r border-slate-200 w-[100px]">
                 Waktu
               </th>
-              {ROOM_LIST.map((room) => (
-                <th key={room} className="sticky top-0 z-10 bg-slate-50 text-slate-700 px-4 py-3.5 text-[12px] font-bold tracking-wider uppercase border-r border-slate-100 last:border-r-0">
-                  {room}
-                </th>
-              ))}
+              {ROOM_LIST.map((room) => {
+                const roomLock = getRoomLock(room);
+                return (
+                  <th 
+                    key={room} 
+                    className={`sticky top-0 z-10 bg-slate-50 text-slate-700 px-4 py-3.5 text-[12px] font-bold tracking-wider uppercase border-r border-slate-100 last:border-r-0 ${adminMode ? 'cursor-pointer hover:bg-slate-200 transition-colors' : ''}`}
+                    onClick={() => adminMode && onRoomHeaderClick && onRoomHeaderClick(room, !!roomLock, roomLock?.note || '')}
+                  >
+                    <div className="flex flex-col items-center justify-center gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        {roomLock && <span className="text-amber-500" title="Dikunci">🔒</span>}
+                        {room}
+                      </div>
+                      {adminMode && <span className="text-[9px] text-sky-500 lowercase opacity-0 hover:opacity-100 absolute bottom-0 font-medium tracking-normal mb-1">klik untuk kunci</span>}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

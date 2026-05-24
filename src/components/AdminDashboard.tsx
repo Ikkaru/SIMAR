@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { BookingRequest, BookingStatus, Day, SessionNumber, RoomName, DAYS, getSessionTimes } from '@/lib/types';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { BookingRequest, BookingStatus, Day, SessionNumber, RoomName, DAYS, getSessionTimes, getWeekDates } from '@/lib/types';
 import { 
   fetchAllBookings, fetchBookingStats, reviewBooking, logoutAdmin,
   toggleSlotLock, removeBooking, updateBooking, fetchRoomStats
@@ -22,6 +22,9 @@ export default function AdminDashboard() {
   
   const [selectedDay, setSelectedDay] = useState<Day>('Senin');
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [dates, setDates] = useState<Record<Day, { dateObj: Date; formatted: string }> | null>(null);
+  useEffect(() => { setDates(getWeekDates()); }, []);
 
   // Inspector Modal State
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -91,6 +94,60 @@ export default function AdminDashboard() {
       setInspectorOpen(false);
       setRefreshKey(k => k + 1);
       loadData();
+    } else {
+      showToast(res.message, 'error');
+    }
+  };
+
+  // Full Room Lock State
+  const [roomLockModalOpen, setRoomLockModalOpen] = useState(false);
+  const [selectedRoomToLock, setSelectedRoomToLock] = useState<RoomName | null>(null);
+  const [roomLockType, setRoomLockType] = useState<'day' | 'week' | 'permanent'>('day');
+  const [roomLockNote, setRoomLockNote] = useState('');
+  const [isCurrentlyLocked, setIsCurrentlyLocked] = useState(false);
+
+  const handleRoomHeaderClick = (room: RoomName, isLocked: boolean, currentNote: string) => {
+    setSelectedRoomToLock(room);
+    setIsCurrentlyLocked(isLocked);
+    setRoomLockType('day');
+    setRoomLockNote(currentNote || '');
+    setRoomLockModalOpen(true);
+  };
+
+  const submitRoomLock = async () => {
+    if (!selectedRoomToLock || !dates) return;
+    
+    setIsLoading(true);
+    let lockDates: string[] = [];
+    if (roomLockType === 'day') {
+      lockDates = [dates[selectedDay].dateObj.toISOString().split('T')[0]];
+    } else if (roomLockType === 'week') {
+      lockDates = DAYS.map(d => dates[d].dateObj.toISOString().split('T')[0]);
+    }
+
+    const { setRoomLockFull } = await import('@/lib/actions');
+    const res = await setRoomLockFull(selectedRoomToLock, roomLockType, lockDates, roomLockNote);
+    
+    setIsLoading(false);
+    if (res.success) {
+      showToast(res.message, 'success');
+      setRoomLockModalOpen(false);
+      setRefreshKey(k => k + 1);
+    } else {
+      showToast(res.message, 'error');
+    }
+  };
+
+  const handleRemoveRoomLock = async () => {
+    if (!selectedRoomToLock) return;
+    setIsLoading(true);
+    const { removeRoomLockFull } = await import('@/lib/actions');
+    const res = await removeRoomLockFull(selectedRoomToLock);
+    setIsLoading(false);
+    if (res.success) {
+      showToast(res.message, 'success');
+      setRoomLockModalOpen(false);
+      setRefreshKey(k => k + 1);
     } else {
       showToast(res.message, 'error');
     }
@@ -201,6 +258,7 @@ export default function AdminDashboard() {
             refreshKey={refreshKey} 
             adminMode={true} 
             onSlotClick={handleSlotClick} 
+            onRoomHeaderClick={handleRoomHeaderClick}
           />
         </div>
       </div>
@@ -265,16 +323,22 @@ export default function AdminDashboard() {
 
                   <div className="flex flex-col gap-3 mb-6 bg-slate-50 rounded-xl p-4 border border-slate-100">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ruangan & Waktu</span>
-                      <span className="text-[13px] font-semibold text-slate-800">{b.room} • {b.day}, Sesi {b.session}-{b.session + b.durasiPemakaian - 1}</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>🚪</span> Ruangan & Waktu
+                      </span>
+                      <span className="text-[13px] font-semibold text-slate-800 ml-5">{b.room} • {b.day} {dates?.[b.day]?.formatted ? `(${dates[b.day].formatted})` : ''}, Sesi {b.session}-{b.session + b.durasiPemakaian - 1}</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Penanggung Jawab</span>
-                      <span className="text-[13px] font-semibold text-slate-800">{b.namaPJ}</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>👤</span> Penanggung Jawab
+                      </span>
+                      <span className="text-[13px] font-semibold text-slate-800 ml-5">{b.namaPJ} <span className="text-slate-400 font-medium ml-1">({b.nim || '-'})</span></span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Dosen Pengampu</span>
-                      <span className="text-[13px] font-semibold text-slate-800">{b.dosenPengampu}</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>👨‍🏫</span> Dosen Pengampu
+                      </span>
+                      <span className="text-[13px] font-semibold text-slate-800 ml-5">{b.dosenPengampu}</span>
                     </div>
                   </div>
 
@@ -426,6 +490,62 @@ export default function AdminDashboard() {
                 </div>
               )}
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Room Lock Modal */}
+      {roomLockModalOpen && selectedRoomToLock && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[2000] flex items-center justify-center p-4 sm:p-6 animate-[fadeIn_200ms_ease-out]" onClick={() => setRoomLockModalOpen(false)}>
+          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-[500px] flex flex-col relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-slate-600 to-slate-800" />
+            <div className="flex items-start justify-between px-8 pt-8 pb-5 border-b border-slate-100">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-[22px] font-extrabold text-slate-800 tracking-tight">Kunci Ruangan</h2>
+                <span className="text-[13px] text-slate-500 font-medium">Manajemen status ruangan <strong className="text-sky-600">{selectedRoomToLock}</strong></span>
+              </div>
+              <button className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-rose-100 hover:text-rose-600 transition-colors" onClick={() => setRoomLockModalOpen(false)}>✕</button>
+            </div>
+            <div className="p-8 flex flex-col gap-5">
+              {isCurrentlyLocked && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-2">
+                  <p className="text-[13px] text-amber-800 font-bold mb-3">Ruangan ini sedang dalam status terkunci.</p>
+                  <button className="w-full px-4 py-2.5 rounded-lg font-bold text-[13px] text-white bg-rose-600 hover:bg-rose-700 transition-colors" onClick={handleRemoveRoomLock}>
+                    Buka Kunci Ruangan Sekarang
+                  </button>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-2">Durasi Kunci</label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button className={`px-3 py-2.5 border rounded-xl text-[12px] font-bold transition-all ${roomLockType === 'day' ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`} onClick={() => setRoomLockType('day')}>
+                    1 Hari<br/><span className="text-[10px] font-normal opacity-80">(Hari ini)</span>
+                  </button>
+                  <button className={`px-3 py-2.5 border rounded-xl text-[12px] font-bold transition-all ${roomLockType === 'week' ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`} onClick={() => setRoomLockType('week')}>
+                    1 Minggu<br/><span className="text-[10px] font-normal opacity-80">(5 Hari)</span>
+                  </button>
+                  <button className={`px-3 py-2.5 border rounded-xl text-[12px] font-bold transition-all ${roomLockType === 'permanent' ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`} onClick={() => setRoomLockType('permanent')}>
+                    Seterusnya<br/><span className="text-[10px] font-normal opacity-80">(Permanen)</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-2">Alasan Kunci (Opsional)</label>
+                <input 
+                  type="text" 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[14px] focus:bg-white focus:border-slate-400 focus:ring-4 focus:ring-slate-400/10 outline-none transition-all" 
+                  placeholder="Misal: Maintenance AC, Rapat Prodi" 
+                  value={roomLockNote} 
+                  onChange={(e) => setRoomLockNote(e.target.value)}
+                />
+              </div>
+
+              <button className="w-full mt-2 px-5 py-3.5 rounded-xl font-bold text-[14px] text-white bg-slate-800 hover:bg-slate-900 transition-colors shadow-md disabled:opacity-50" onClick={submitRoomLock} disabled={isLoading}>
+                {isLoading ? 'Menyimpan...' : 'Terapkan Kunci Ruangan'}
+              </button>
             </div>
           </div>
         </div>

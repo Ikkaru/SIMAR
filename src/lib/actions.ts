@@ -34,6 +34,9 @@ export async function submitBooking(
     if (!formData.namaPJ || formData.namaPJ.trim().length < 2) {
       return { success: false, message: 'Nama Penanggung Jawab harus diisi (min. 2 karakter).' };
     }
+    if (!formData.nim || formData.nim.trim().length < 3) {
+      return { success: false, message: 'NIM harus diisi (min. 3 karakter).' };
+    }
     if (!formData.namaMatakuliah || formData.namaMatakuliah.trim().length < 2) {
       return { success: false, message: 'Nama Mata Kuliah harus diisi (min. 2 karakter).' };
     }
@@ -69,6 +72,7 @@ export async function submitBooking(
     const booking = await addBooking({
       day: formData.day, session: formData.session, room: formData.room,
       namaPJ: formData.namaPJ.trim(),
+      nim: formData.nim.trim(),
       durasiPemakaian: formData.durasiPemakaian,
       namaMatakuliah: formData.namaMatakuliah.trim(),
       dosenPengampu: formData.dosenPengampu.trim(),
@@ -194,7 +198,7 @@ export async function fetchDayOverrides(day: Day): Promise<ActionResult<Record<s
   }
 }
 
-// ─── Lock Toggle ─────────────────────────────────────────────
+// ─── Lock Toggle (Per Slot) ──────────────────────────────────
 
 export async function toggleSlotLock(
   day: Day, session: SessionNumber, room: RoomName,
@@ -203,14 +207,59 @@ export async function toggleSlotLock(
   try {
     if (isLocking) {
       await lockSlot(day, session, room, note);
-      return { success: true, message: 'Ruangan berhasil dikunci.' };
+      return { success: true, message: 'Slot ruangan berhasil dikunci.' };
     } else {
       await unlockSlot(day, session, room);
-      return { success: true, message: 'Kunci ruangan dibuka.' };
+      return { success: true, message: 'Kunci slot ruangan dibuka.' };
     }
   } catch (error) {
     console.error('toggleSlotLock error:', error);
-    return { success: false, message: 'Gagal mengubah status kunci.' };
+    return { success: false, message: 'Gagal mengubah status kunci slot.' };
+  }
+}
+
+// ─── Advanced Room Locking (Full Room) ───────────────────────
+
+import { lockRoomFull, unlockRoomFull } from './roomLocking';
+
+export async function setRoomLockFull(
+  room: RoomName,
+  type: 'day' | 'week' | 'permanent',
+  dates: string[],
+  note?: string
+): Promise<ActionResult> {
+  try {
+    const success = await lockRoomFull(room, type, dates, note);
+    if (!success) return { success: false, message: 'Gagal mengunci ruangan.' };
+    
+    return { success: true, message: 'Ruangan berhasil dikunci.' };
+  } catch (error) {
+    console.error('setRoomLockFull error:', error);
+    return { success: false, message: 'Gagal mengunci ruangan.' };
+  }
+}
+
+export async function removeRoomLockFull(room: RoomName): Promise<ActionResult> {
+  try {
+    const success = await unlockRoomFull(room);
+    if (!success) return { success: false, message: 'Gagal membuka kunci ruangan.' };
+    
+    return { success: true, message: 'Kunci ruangan berhasil dibuka.' };
+  } catch (error) {
+    console.error('removeRoomLockFull error:', error);
+    return { success: false, message: 'Gagal membuka kunci ruangan.' };
+  }
+}
+
+import { getLockedRoomsForDate, LockedRoom } from './roomLocking';
+
+export async function fetchLockedRoomsForDate(dateStr: string): Promise<{ success: boolean; data?: LockedRoom[] }> {
+  try {
+    const rooms = await getLockedRoomsForDate(dateStr);
+    return { success: true, data: rooms };
+  } catch (e) {
+    console.error(e);
+    return { success: false };
   }
 }
 

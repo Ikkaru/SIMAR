@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Day, SessionNumber, RoomName, DAYS } from '@/lib/types';
+import { Day, SessionNumber, RoomName, DAYS, isDayPast } from '@/lib/types';
 import { getAvailableRoomsSummary } from '@/lib/actions';
 import BookingModal from '@/components/BookingModal';
 import DaySelector from '@/components/DaySelector';
@@ -35,6 +35,11 @@ export default function AvailableRoomsPage() {
 
   useEffect(() => {
     load();
+    // Auto-select first non-past day
+    const firstAvailable = DAYS.find(d => !isDayPast(d));
+    if (firstAvailable) {
+      setSelectedDay(firstAvailable);
+    }
   }, []);
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -148,7 +153,7 @@ export default function AvailableRoomsPage() {
       </div>
 
       <div className="mb-12">
-        <DaySelector selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+        <DaySelector selectedDay={selectedDay} onSelectDay={setSelectedDay} disablePastDays={true} />
       </div>
 
       {isLoading ? (

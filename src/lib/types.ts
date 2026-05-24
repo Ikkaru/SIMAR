@@ -69,6 +69,7 @@ export interface BookingRequest {
   session: SessionNumber;
   room: RoomName;
   namaPJ: string;              // Nama Penanggung Jawab
+  nim: string;                 // NIM Penanggung Jawab
   durasiPemakaian: number;     // Durasi dalam jam
   namaMatakuliah: string;      // Nama Mata Kuliah
   dosenPengampu: string;       // Nama Dosen Pengampu
@@ -84,6 +85,7 @@ export interface BookingFormData {
   session: SessionNumber;
   room: RoomName;
   namaPJ: string;
+  nim: string;
   durasiPemakaian: number;
   namaMatakuliah: string;
   dosenPengampu: string;
@@ -126,3 +128,58 @@ export function getSessionTimes(day: Day): SessionTime[] {
 
 /** Semua hari aktif */
 export const DAYS: Day[] = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+
+const INDONESIAN_MONTHS = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+/** Helper: Mendapatkan tanggal untuk minggu yang sedang berjalan */
+export function getWeekDates(): Record<Day, { dateObj: Date; formatted: string }> {
+  const now = new Date();
+  
+  // Jika hari Sabtu (6) atau Minggu (0), kita geser ke minggu berikutnya agar jadwal menampilkan minggu depan
+  const dayOfWeek = now.getDay();
+  if (dayOfWeek === 6 || dayOfWeek === 0) {
+    const daysToAdd = dayOfWeek === 6 ? 2 : 1;
+    now.setDate(now.getDate() + daysToAdd);
+  }
+
+  // Cari tanggal hari Senin pada minggu tersebut
+  // getDay() mengembalikan 1 untuk Senin, 2 untuk Selasa, dst.
+  const currentDayOfWeek = now.getDay(); 
+  const diffToMonday = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+  
+  const mondayDate = new Date(now);
+  mondayDate.setDate(now.getDate() + diffToMonday);
+
+  const result: any = {};
+  
+  DAYS.forEach((day, index) => {
+    const dateForDay = new Date(mondayDate);
+    dateForDay.setDate(mondayDate.getDate() + index);
+    
+    const dayNum = dateForDay.getDate();
+    const monthStr = INDONESIAN_MONTHS[dateForDay.getMonth()];
+    
+    result[day] = {
+      dateObj: dateForDay,
+      formatted: `${dayNum} ${monthStr}`
+    };
+  });
+
+  return result;
+}
+
+/** Helper: Cek apakah hari ini sudah lewat (untuk disable booking) */
+export function isDayPast(dayName: Day): boolean {
+  const dates = getWeekDates();
+  const targetDateObj = dates[dayName].dateObj;
+  
+  // Set target date ke akhir hari tersebut agar bisa di-booking sampai jam 23:59 hari itu
+  targetDateObj.setHours(23, 59, 59, 999);
+  
+  const now = new Date();
+  return now.getTime() > targetDateObj.getTime();
+}
+

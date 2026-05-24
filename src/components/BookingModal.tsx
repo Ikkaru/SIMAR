@@ -19,6 +19,7 @@ export default function BookingModal({
 }: BookingModalProps) {
   const [formData, setFormData] = useState<Omit<BookingFormData, 'day' | 'session' | 'room'>>({
     namaPJ: '',
+    nim: '',
     durasiPemakaian: 1,
     namaMatakuliah: '',
     dosenPengampu: '',
@@ -100,19 +101,36 @@ export default function BookingModal({
           </div>
 
           <form id="booking-form" onSubmit={handleSubmit} className="flex flex-col gap-5">
-            <div>
-              <label htmlFor="namaPJ" className="block text-[13px] font-bold text-slate-700 mb-2">Nama Penanggung Jawab (PJ) <span className="text-rose-500">*</span></label>
-              <input
-                type="text"
-                id="namaPJ"
-                name="namaPJ"
-                className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl text-[14px] text-slate-800 placeholder-slate-400 focus:bg-white focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all disabled:opacity-50"
-                placeholder="Masukkan nama lengkap Anda"
-                value={formData.namaPJ}
-                onChange={handleChange}
-                required
-                disabled={isLoading}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label htmlFor="namaPJ" className="block text-[13px] font-bold text-slate-700 mb-2">Penanggung Jawab (PJ) <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  id="namaPJ"
+                  name="namaPJ"
+                  className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl text-[14px] text-slate-800 placeholder-slate-400 focus:bg-white focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all disabled:opacity-50"
+                  placeholder="Nama Lengkap"
+                  value={formData.namaPJ}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="nim" className="block text-[13px] font-bold text-slate-700 mb-2">NIM <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  id="nim"
+                  name="nim"
+                  className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl text-[14px] text-slate-800 placeholder-slate-400 focus:bg-white focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all disabled:opacity-50"
+                  placeholder="Nomor Induk Mahasiswa"
+                  value={formData.nim}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
             </div>
 
             <div>
