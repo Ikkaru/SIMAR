@@ -1,7 +1,7 @@
 'use server';
 
 // ============================================================
-// SIMAR V3 — Server Actions
+// SIMAR V3 — Server Actions (Supabase Optimized)
 // ============================================================
 
 import {
@@ -17,6 +17,7 @@ import {
   deleteBooking, editBooking, getBookingById, getRoomUsageStats,
 } from './store';
 import { cookies } from 'next/headers';
+import { supabase } from './supabase';
 
 interface ActionResult<T = unknown> {
   success: boolean;
@@ -49,14 +50,14 @@ export async function submitBooking(
       if (s > 11) {
         return { success: false, message: 'Durasi melebihi batas jadwal (Sesi 11).' };
       }
-      const locked = isSlotLocked(formData.day, s, formData.room);
+      const locked = await isSlotLocked(formData.day, s, formData.room);
       if (locked) {
         return { success: false, message: `Sesi ${s} dikunci oleh admin.` };
       }
       if (!isSlotAvailable(formData.day, s, formData.room)) {
         return { success: false, message: `Sesi ${s} sudah terisi jadwal resmi.` };
       }
-      const st = isSlotBooked(formData.day, s, formData.room);
+      const st = await isSlotBooked(formData.day, s, formData.room);
       if (st.isApproved) {
         return { success: false, message: `Sesi ${s} sudah dipinjam.` };
       }
@@ -65,13 +66,17 @@ export async function submitBooking(
       }
     }
 
-    const booking = addBooking({
+    const booking = await addBooking({
       day: formData.day, session: formData.session, room: formData.room,
       namaPJ: formData.namaPJ.trim(),
       durasiPemakaian: formData.durasiPemakaian,
       namaMatakuliah: formData.namaMatakuliah.trim(),
       dosenPengampu: formData.dosenPengampu.trim(),
     });
+
+    if (!booking) {
+      return { success: false, message: 'Gagal menyimpan booking ke database.' };
+    }
 
     return {
       success: true,
@@ -90,7 +95,7 @@ export async function reviewBooking(
   bookingId: string, action: 'approved' | 'rejected', note?: string
 ): Promise<ActionResult<BookingRequest>> {
   try {
-    const updated = updateBookingStatus(bookingId, action, note);
+    const updated = await updateBookingStatus(bookingId, action, note);
     if (!updated) {
       return { success: false, message: `Booking ${bookingId} tidak ditemukan.` };
     }
@@ -106,7 +111,7 @@ export async function reviewBooking(
 
 export async function removeBooking(bookingId: string): Promise<ActionResult> {
   try {
-    const ok = deleteBooking(bookingId);
+    const ok = await deleteBooking(bookingId);
     if (!ok) return { success: false, message: `Booking ${bookingId} tidak ditemukan.` };
     return { success: true, message: `Booking ${bookingId} berhasil dihapus.` };
   } catch (error) {
@@ -122,7 +127,7 @@ export async function updateBooking(
   updates: { namaPJ?: string; namaMatakuliah?: string; dosenPengampu?: string; durasiPemakaian?: number }
 ): Promise<ActionResult<BookingRequest>> {
   try {
-    const updated = editBooking(bookingId, updates);
+    const updated = await editBooking(bookingId, updates);
     if (!updated) return { success: false, message: `Booking ${bookingId} tidak ditemukan.` };
     return { success: true, message: `Booking ${bookingId} berhasil diperbarui.`, data: updated };
   } catch (error) {
@@ -134,56 +139,18 @@ export async function updateBooking(
 // ─── Fetch Helpers ───────────────────────────────────────────
 
 export async function fetchAllBookings(): Promise<ActionResult<BookingRequest[]>> {
-  return { success: true, message: 'OK', data: getAllBookings() };
+  return { success: true, message: 'OK', data: await getAllBookings() };
 }
 
 export async function fetchBookingsByStatus(status: BookingStatus): Promise<ActionResult<BookingRequest[]>> {
-  return { success: true, message: 'OK', data: getBookingsByStatus(status) };
+  return { success: true, message: 'OK', data: await getBookingsByStatus(status) };
 }
 
-export async function fetchBookingStats(): Promise<ActionResult<ReturnType<typeof getBookingStats>>> {
-  return { success: true, message: 'OK', data: getBookingStats() };
+export async function fetchBookingStats(): Promise<ActionResult<ReturnType<typeof getBookingStats> extends Promise<infer U> ? U : never>> {
+  return { success: true, message: 'OK', data: await getBookingStats() };
 }
 
-// ─── Slot Status ─────────────────────────────────────────────
-
-export async function fetchSlotStatus(
-  day: Day, session: SessionNumber, room: RoomName
-): Promise<ActionResult<{
-  status: 'scheduled' | 'borrowed' | 'available' | 'pending' | 'approved' | 'locked';
-  courseName: string;
-  booking?: BookingRequest;
-}>> {
-  try {
-    const locked = isSlotLocked(day, session, room);
-    if (locked) {
-      return { success: true, message: 'OK', data: { status: 'locked', courseName: locked.note || 'Dikunci' } };
-    }
-
-    const slotAvailable = isSlotAvailable(day, session, room);
-    if (!slotAvailable) {
-      const slotData = getSlotData(day, session, room);
-      return { success: true, message: 'OK', data: { status: slotData?.status || 'scheduled', courseName: slotData?.courseName || '' } };
-    }
-
-    const bookingState = isSlotBooked(day, session, room);
-    if (bookingState.isApproved) {
-      const bks = getBookingsForSlot(day, session, room);
-      const b = bks.find((x) => x.status === 'approved');
-      return { success: true, message: 'OK', data: { status: 'approved', courseName: b?.namaMatakuliah || 'Dipinjam', booking: b } };
-    }
-    if (bookingState.isPending) {
-      const bks = getBookingsForSlot(day, session, room);
-      const b = bks.find((x) => x.status === 'pending');
-      return { success: true, message: 'OK', data: { status: 'pending', courseName: b?.namaMatakuliah || 'Menunggu', booking: b } };
-    }
-
-    return { success: true, message: 'OK', data: { status: 'available', courseName: '' } };
-  } catch (error) {
-    console.error('fetchSlotStatus error:', error);
-    return { success: false, message: 'Error.' };
-  }
-}
+// ─── Slot Status (Bulk Fetch Optimized) ──────────────────────
 
 export async function fetchDayOverrides(day: Day): Promise<ActionResult<Record<string, {
   status: 'scheduled' | 'borrowed' | 'available' | 'pending' | 'approved' | 'locked';
@@ -194,22 +161,28 @@ export async function fetchDayOverrides(day: Day): Promise<ActionResult<Record<s
     const overrides: Record<string, any> = {};
     const baseSlots = getScheduleForDay(day);
 
+    // Bulk fetch to prevent N+1 queries
+    const { data: lockedSlotsData } = await supabase.from('locked_slots').select('*').eq('day', day);
+    const lockedSlotsMap = new Map((lockedSlotsData || []).map((l: any) => [`${l.session}-${l.room}`, l]));
+
+    const { data: bookingsData } = await supabase.from('bookings').select('*').eq('day', day).neq('status', 'rejected');
+    const bookingsList = (bookingsData || []) as BookingRequest[];
+
     for (const slot of baseSlots) {
-      const locked = isSlotLocked(day, slot.session, slot.room);
+      const locked = lockedSlotsMap.get(`${slot.session}-${slot.room}`);
       if (locked) {
         overrides[`${day}-${slot.session}-${slot.room}`] = { status: 'locked', courseName: locked.note || 'Dikunci' };
         continue;
       }
 
       if (slot.status === 'available') {
-        const bookingState = isSlotBooked(day, slot.session, slot.room);
-        if (bookingState.isApproved) {
-          const bks = getBookingsForSlot(day, slot.session, slot.room);
-          const b = bks.find((x) => x.status === 'approved');
+        const slotBookings = bookingsList.filter(b => b.room === slot.room && slot.session >= b.session && slot.session < b.session + b.durasiPemakaian);
+        
+        if (slotBookings.some(b => b.status === 'approved')) {
+          const b = slotBookings.find(b => b.status === 'approved');
           overrides[`${day}-${slot.session}-${slot.room}`] = { status: 'approved', courseName: b?.namaMatakuliah || 'Dipinjam', booking: b };
-        } else if (bookingState.isPending) {
-          const bks = getBookingsForSlot(day, slot.session, slot.room);
-          const b = bks.find((x) => x.status === 'pending');
+        } else if (slotBookings.some(b => b.status === 'pending')) {
+          const b = slotBookings.find(b => b.status === 'pending');
           overrides[`${day}-${slot.session}-${slot.room}`] = { status: 'pending', courseName: b?.namaMatakuliah || 'Menunggu', booking: b };
         }
       }
@@ -229,10 +202,10 @@ export async function toggleSlotLock(
 ): Promise<ActionResult> {
   try {
     if (isLocking) {
-      lockSlot(day, session, room, note);
+      await lockSlot(day, session, room, note);
       return { success: true, message: 'Ruangan berhasil dikunci.' };
     } else {
-      unlockSlot(day, session, room);
+      await unlockSlot(day, session, room);
       return { success: true, message: 'Kunci ruangan dibuka.' };
     }
   } catch (error) {
@@ -241,30 +214,7 @@ export async function toggleSlotLock(
   }
 }
 
-// ─── Smart Duration Logic ────────────────────────────────────
-
-export async function getMaxConsecutiveSlots(
-  day: Day, startSession: SessionNumber, room: RoomName
-): Promise<ActionResult<number>> {
-  try {
-    let count = 0;
-    for (let s = startSession; s <= 11; s++) {
-      const sn = s as SessionNumber;
-      if (!isSlotAvailable(day, sn, room)) break;
-      if (isSlotLocked(day, sn, room)) break;
-      const st = isSlotBooked(day, sn, room);
-      if (st.isApproved || st.isPending) break;
-      count++;
-      if (count >= 6) break; // cap at 6
-    }
-    return { success: true, message: 'OK', data: Math.max(count, 1) };
-  } catch (error) {
-    console.error('getMaxConsecutiveSlots error:', error);
-    return { success: false, message: 'Error.' };
-  }
-}
-
-// ─── 5-Day Available Rooms ───────────────────────────────────
+// ─── 5-Day Available Rooms (Bulk Fetch Optimized) ────────────
 
 export async function getAvailableRoomsSummary(): Promise<
   ActionResult<Record<Day, { session: SessionNumber; room: RoomName; time: string }[]>>
@@ -274,16 +224,23 @@ export async function getAvailableRoomsSummary(): Promise<
       Senin: [], Selasa: [], Rabu: [], Kamis: [], Jumat: []
     };
 
+    // Bulk fetch ALL locks and active bookings once
+    const { data: lockedSlotsData } = await supabase.from('locked_slots').select('*');
+    const { data: bookingsData } = await supabase.from('bookings').select('*').neq('status', 'rejected');
+    
+    const allLocked = lockedSlotsData || [];
+    const allBookings = (bookingsData || []) as BookingRequest[];
+
     for (const day of DAYS) {
       const baseSlots = getScheduleForDay(day);
       const sessionTimes = getSessionTimes(day);
 
       for (const slot of baseSlots) {
         if (slot.status === 'available') {
-          const bookedStatus = isSlotBooked(day, slot.session, slot.room);
-          const locked = isSlotLocked(day, slot.session, slot.room);
+          const isLocked = allLocked.some((l: any) => l.day === day && l.session === slot.session && l.room === slot.room);
+          const hasBooking = allBookings.some((b) => b.day === day && b.room === slot.room && slot.session >= b.session && slot.session < b.session + b.durasiPemakaian);
 
-          if (!bookedStatus.isApproved && !bookedStatus.isPending && !locked) {
+          if (!isLocked && !hasBooking) {
             const st = sessionTimes.find(s => s.sesi === slot.session);
             summary[day].push({
               session: slot.session,
@@ -302,12 +259,12 @@ export async function getAvailableRoomsSummary(): Promise<
   }
 }
 
-// ─── Room Usage Stats (Proactive Admin Feature) ──────────────
+// ─── Room Usage Stats ────────────────────────────────────────
 
 export async function fetchRoomStats(): Promise<
   ActionResult<{ room: RoomName; bookedCount: number; approvedCount: number }[]>
 > {
-  return { success: true, message: 'OK', data: getRoomUsageStats() };
+  return { success: true, message: 'OK', data: await getRoomUsageStats() };
 }
 
 // ─── Auth ────────────────────────────────────────────────────
