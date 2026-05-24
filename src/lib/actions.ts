@@ -7,7 +7,7 @@
 import {
   BookingFormData, BookingRequest, BookingStatus,
   Day, SessionNumber, RoomName, DAYS, ROOM_LIST,
-  getSessionTimes,
+  getSessionTimes, getWeekDates
 } from './types';
 import { isSlotAvailable, getSlotData, getScheduleForDay } from './scheduleData';
 import {
@@ -277,15 +277,26 @@ export async function getAvailableRoomsSummary(): Promise<
     const { data: lockedSlotsData } = await supabase.from('locked_slots').select('*');
     const { data: bookingsData } = await supabase.from('bookings').select('*').neq('status', 'rejected');
     
+    const dates = getWeekDates();
+    const dateStrings = DAYS.map(d => dates[d].dateObj.toISOString().split('T')[0]);
+    const { data: fullLockedData } = await supabase.from('locked_rooms')
+      .select('*')
+      .or(`is_permanent.eq.true,date.in.(${dateStrings.join(',')})`);
+
     const allLocked = lockedSlotsData || [];
     const allBookings = (bookingsData || []) as BookingRequest[];
+    const allFullLocked = fullLockedData || [];
 
     for (const day of DAYS) {
       const baseSlots = getScheduleForDay(day);
       const sessionTimes = getSessionTimes(day);
+      const currentDateStr = dates[day].dateObj.toISOString().split('T')[0];
 
       for (const slot of baseSlots) {
         if (slot.status === 'available') {
+          const isRoomLocked = allFullLocked.some(l => l.room === slot.room && (l.is_permanent || l.date === currentDateStr));
+          if (isRoomLocked) continue;
+
           const isLocked = allLocked.some((l: any) => l.day === day && l.session === slot.session && l.room === slot.room);
           const hasBooking = allBookings.some((b) => b.day === day && b.room === slot.room && slot.session >= b.session && slot.session < b.session + b.durasiPemakaian);
 
