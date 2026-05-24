@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loginAdmin } from '@/lib/actions';
 
+import Image from 'next/image';
+
 export default function AdminLogin() {
   const router = useRouter();
   const [password, setPassword] = useState('');
@@ -27,8 +29,15 @@ export default function AdminLogin() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-6">
       <div className="w-full max-w-[440px] bg-white/80 backdrop-blur-xl rounded-[28px] shadow-2xl shadow-sky-900/10 border border-slate-200/60 p-10 text-center animate-[slideUp_400ms_ease-out]">
-        <div className="w-16 h-16 bg-gradient-to-br from-sky-400 to-sky-600 rounded-2xl flex items-center justify-center text-white text-2xl font-extrabold mx-auto shadow-lg shadow-sky-500/30 mb-6">
-          SR
+        <div className="mx-auto flex justify-center mb-6">
+          <Image 
+            src="/logo.png" 
+            alt="SIMAR Logo" 
+            width={96} 
+            height={96} 
+            className="drop-shadow-xl hover:scale-105 transition-transform duration-300"
+            priority 
+          />
         </div>
         <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-2.5">Admin Prodi</h1>
         <p className="text-[15px] font-medium text-slate-500 mb-8 leading-relaxed">
