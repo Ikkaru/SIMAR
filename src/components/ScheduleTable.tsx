@@ -110,8 +110,8 @@ export default function ScheduleTable({
     if (roomLock) {
       if (session === 1) {
         return (
-          <td key={room} rowSpan={11} className="p-0 align-middle">
-            <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-4 text-center bg-slate-100/60 border border-slate-200 m-1.5 rounded-[1.25rem] shadow-inner overflow-hidden relative group">
+          <td key={room} rowSpan={11} className="p-0 align-middle relative">
+            <div className="absolute inset-1.5 flex flex-col items-center justify-center bg-slate-100/60 border border-slate-200 rounded-[1.25rem] shadow-inner overflow-hidden group">
               <div className="absolute inset-0 bg-[url('/noise.png')] opacity-5 mix-blend-overlay"></div>
               <div className="relative z-10 flex flex-col items-center">
                 <span className="text-4xl mb-2 text-slate-400 group-hover:scale-110 transition-transform">🔒</span>
