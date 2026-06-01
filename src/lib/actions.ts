@@ -431,7 +431,7 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
   try {
     await requireAdmin();
 
-    if (!/^\\d{4}$/.test(tahunAjar) || !['1', '2'].includes(idSemester)) {
+    if (!/^\d{4}$/.test(tahunAjar) || !['1', '2'].includes(idSemester)) {
       return { success: false, message: 'Parameter tahun ajar atau semester tidak valid.' };
     }
 
