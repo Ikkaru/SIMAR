@@ -5,7 +5,7 @@ import { defineConfig } from "prisma/config";
 dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
 
-const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL;
+const databaseUrl = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL;
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
