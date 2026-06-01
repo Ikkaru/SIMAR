@@ -131,8 +131,30 @@ EXCEPTION WHEN unique_violation THEN
 END;
 $$;
 
+-- ─── 6. Tabel Announcements (Pengumuman) ────────────────────
+CREATE TABLE IF NOT EXISTS announcements (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT DEFAULT 'info' CHECK (type IN ('info', 'warning', 'urgent')),
+  is_active BOOLEAN DEFAULT true,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+
+-- Semua orang bisa membaca pengumuman aktif
+CREATE POLICY "announcements_select_all" ON announcements
+  FOR SELECT USING (true);
+
+-- Hanya service role yang bisa insert/update/delete
+CREATE POLICY "announcements_modify_service" ON announcements
+  FOR ALL USING (auth.role() = 'service_role');
+
 -- ─── Selesai ─────────────────────────────────────────────────
 -- Pastikan untuk:
 -- 1. Menjalankan SQL ini di Supabase SQL Editor
 -- 2. Mengisi SUPABASE_SERVICE_ROLE_KEY di .env.local
 -- 3. Mengisi ADMIN_PASSWORD_HASH di .env.local
+

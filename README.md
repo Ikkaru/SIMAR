@@ -4,17 +4,41 @@
 
 ## 📋 Fitur
 
-| Fitur | Deskripsi |
-|---|---|
-| **Jadwal Ruangan** | Tabel jadwal mingguan 11 ruangan × 11 sesi berdasarkan data resmi prodi |
-| **Booking Ruangan** | Form peminjaman ruangan kosong dengan validasi sesi, durasi, dan konflik |
-| **Cek Status** | Pencarian booking by ID/NIM untuk cek status (pending/approved/rejected) |
-| **Ruangan Kosong** | View slot tersedia per hari, dikelompokkan berdasarkan ruangan |
-| **Admin Dashboard** | Review & approve/reject booking, statistik, inspeksi slot |
-| **Lock Slot** | Admin mengunci slot tertentu (per sesi) |
-| **Lock Ruangan** | Admin mengunci seluruh ruangan (per hari/minggu/permanen) |
-| **Edit & Delete** | Admin mengedit data booking atau menghapus booking |
-| **Responsive UI** | Mobile-friendly dengan hamburger menu |
+### 👤 Fitur Publik (Mahasiswa / Dosen)
+
+*   **Jadwal Ruangan Terintegrasi**
+    *   Tabel jadwal mingguan interaktif yang menampilkan 11 ruangan kelas/lab.
+    *   Mendukung 11 sesi per hari berdasarkan data dan kurikulum resmi program studi.
+*   **Booking / Peminjaman Cerdas**
+    *   Formulir peminjaman untuk ruangan dan sesi yang sedang kosong.
+    *   Mendukung peminjaman lebih dari 1 sesi sekaligus (durasi panjang).
+    *   **Validasi Real-time:** Mencegah terjadinya *double booking* atau bentrok jadwal pada tingkat database (*atomic booking*), sehingga aman saat diakses bersamaan.
+*   **Pelacakan Status (Tracking)**
+    *   Pencarian status peminjaman secara mandiri menggunakan **ID Booking** atau **NIM**.
+    *   Status indikator yang jelas: `Pending` (menunggu), `Approved` (disetujui), atau `Rejected` (ditolak).
+*   **Pencarian Ruangan Kosong**
+    *   Halaman khusus untuk melihat ketersediaan slot kosong per hari.
+    *   Dikelompokkan berdasarkan ruangan untuk mempercepat pencarian ruang yang tersedia.
+
+### 🛡️ Fitur Administrator
+
+*   **Admin Dashboard & Manajemen Peminjaman**
+    *   Panel khusus yang dilindungi autentikasi (*session-based*).
+    *   Fitur untuk me-*review*, **Approve** (menyetujui), atau **Reject** (menolak) permohonan peminjaman yang masuk.
+*   **Manajemen Data (CRUD)**
+    *   Hak akses penuh untuk meng-**Edit** detail peminjaman yang sudah ada atau men-**Delete** data peminjaman jika diperlukan.
+*   **Lock Slot (Kunci Sesi)**
+    *   Admin dapat mengunci/memblokir slot sesi tertentu di ruangan tertentu (misal: Ruang Lab A sesi ke-3 tidak bisa dipinjam).
+*   **Lock Ruangan (Kunci Penuh)**
+    *   Fitur untuk memblokir sebuah ruangan secara utuh.
+    *   Mendukung opsi fleksibel: dikunci pada hari tertentu, dikunci secara mingguan, atau dikunci permanen (contoh: ruangan dalam perbaikan).
+*   **Statistik & Inspeksi**
+    *   Ringkasan data penggunaan ruangan dan fitur untuk menginspeksi ketersediaan slot secara cepat dari kacamata admin.
+
+### ✨ UI/UX & Performa
+
+*   **Responsive & Mobile-Friendly:** Antarmuka modern dengan Tailwind CSS, dilengkapi navigasi yang nyaman digunakan di *smartphone*.
+*   **Keamanan Terjamin:** Menerapkan *Row Level Security (RLS)* di database dan enkripsi kata sandi Admin tingkat tinggi.
 
 ## 🛠️ Tech Stack
 

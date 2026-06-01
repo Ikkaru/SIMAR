@@ -286,9 +286,10 @@ export async function getAvailableRoomsSummary(): Promise<
       Senin: [], Selasa: [], Rabu: [], Kamis: [], Jumat: []
     };
 
-    // Bulk fetch ALL locks and active bookings once
+    // Bulk fetch ALL data to avoid sequential queries in loop
     const { data: lockedSlotsData } = await supabase.from('locked_slots').select('*');
     const { data: bookingsData } = await supabase.from('bookings').select('*').neq('status', 'rejected');
+    const { data: officialSchedulesData } = await supabase.from('official_schedules').select('*');
     
     const dates = getWeekDates();
     const dateStrings = DAYS.map(d => dates[d].dateObj.toISOString().split('T')[0]);
@@ -299,29 +300,37 @@ export async function getAvailableRoomsSummary(): Promise<
     const allLocked = lockedSlotsData || [];
     const allBookings = (bookingsData || []) as BookingRequest[];
     const allFullLocked = fullLockedData || [];
+    const allOfficialSchedules = officialSchedulesData || [];
 
     for (const day of DAYS) {
-      const scheduleRes = await fetchScheduleForDay(day);
-      const baseSlots = scheduleRes.success && scheduleRes.data ? scheduleRes.data : [];
       const sessionTimes = getSessionTimes(day);
       const currentDateStr = dates[day].dateObj.toISOString().split('T')[0];
 
-      for (const slot of baseSlots) {
-        if (slot.status === 'available') {
-          const isRoomLocked = allFullLocked.some(l => l.room === slot.room && (l.is_permanent || l.locked_date === currentDateStr));
+      for (let s = 1; s <= 11; s++) {
+        for (const room of ROOM_LIST) {
+          // Check official schedule
+          const isScheduled = allOfficialSchedules.some(os => os.day === day && os.session === s && os.room === room);
+          if (isScheduled) continue; // Not available
+
+          // Check full room lock
+          const isRoomLocked = allFullLocked.some(l => l.room === room && (l.is_permanent || l.locked_date === currentDateStr));
           if (isRoomLocked) continue;
 
-          const isLocked = allLocked.some((l: any) => l.day === day && l.session === slot.session && l.room === slot.room);
-          const hasBooking = allBookings.some((b) => b.day === day && b.room === slot.room && slot.session >= b.session && slot.session < b.session + b.durasiPemakaian);
+          // Check slot lock
+          const isLocked = allLocked.some((l: any) => l.day === day && l.session === s && l.room === room);
+          if (isLocked) continue;
 
-          if (!isLocked && !hasBooking) {
-            const st = sessionTimes.find(s => s.sesi === slot.session);
-            summary[day].push({
-              session: slot.session,
-              room: slot.room,
-              time: `${st?.jamMulai} – ${st?.jamAkhir}`
-            });
-          }
+          // Check bookings
+          const hasBooking = allBookings.some((b) => b.day === day && b.room === room && s >= b.session && s < b.session + b.durasiPemakaian);
+          if (hasBooking) continue;
+
+          // If we reach here, the slot is available
+          const st = sessionTimes.find(t => t.sesi === s);
+          summary[day].push({
+            session: s as SessionNumber,
+            room: room as RoomName,
+            time: `${st?.jamMulai} – ${st?.jamAkhir}`
+          });
         }
       }
     }
@@ -490,6 +499,7 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
           const hari = $(tds[1]).text().trim();
           const sesi = parseInt($(tds[2]).text().trim(), 10);
           const mataKuliah = $(tds[4]).text().trim();
+          const semester = $(tds[6]).text().trim();
           const ruang = $(tds[9]).text().trim();
           const kelas = $(tds[10]).text().trim();
 
@@ -516,7 +526,7 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
               day: hari,
               session: sesi,
               room: matchedRoom,
-              course_name: `${mataKuliah} (${kelas}) - ${prodi.name.replace('S-1 ', '')}`
+              course_name: `${mataKuliah} (${kelas}) (Semester ${semester})`
             });
           }
         }
@@ -599,5 +609,215 @@ export async function autoCleanOldBookings() {
     await adminDb.from('bookings').delete().lt('createdAt', cutoff);
   } catch (error) {
     console.error('Auto clean failed:', error);
+  }
+}
+
+// ─── Manual Official Schedule Management (CRUD) ─────────────
+
+export async function addOfficialSchedule(
+  day: Day, session: SessionNumber, room: RoomName, courseName: string
+): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    if (!courseName || courseName.trim().length < 2) {
+      return { success: false, message: 'Nama mata kuliah minimal 2 karakter.' };
+    }
+
+    // Check for duplicates
+    const { data: existing } = await supabaseAdmin
+      .from('official_schedules')
+      .select('id')
+      .eq('day', day)
+      .eq('session', session)
+      .eq('room', room)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      return { success: false, message: 'Slot ini sudah memiliki jadwal resmi. Gunakan fitur edit untuk mengubahnya.' };
+    }
+
+    const { error } = await supabaseAdmin.from('official_schedules').insert([{
+      day,
+      session,
+      room,
+      course_name: courseName.trim()
+    }]);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/');
+    return { success: true, message: 'Jadwal resmi berhasil ditambahkan.' };
+  } catch (error: any) {
+    console.error('addOfficialSchedule error:', error);
+    return { success: false, message: error.message === 'Unauthorized: Admin authentication required.' ? error.message : 'Gagal menambahkan jadwal resmi.' };
+  }
+}
+
+export async function editOfficialSchedule(
+  day: Day, session: SessionNumber, room: RoomName, newCourseName: string
+): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    if (!newCourseName || newCourseName.trim().length < 2) {
+      return { success: false, message: 'Nama mata kuliah minimal 2 karakter.' };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('official_schedules')
+      .update({ course_name: newCourseName.trim() })
+      .eq('day', day)
+      .eq('session', session)
+      .eq('room', room)
+      .select();
+
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) {
+      return { success: false, message: 'Jadwal resmi tidak ditemukan pada slot ini.' };
+    }
+
+    revalidatePath('/');
+    return { success: true, message: 'Jadwal resmi berhasil diperbarui.' };
+  } catch (error: any) {
+    console.error('editOfficialSchedule error:', error);
+    return { success: false, message: error.message === 'Unauthorized: Admin authentication required.' ? error.message : 'Gagal memperbarui jadwal resmi.' };
+  }
+}
+
+export async function deleteOfficialSchedule(
+  day: Day, session: SessionNumber, room: RoomName
+): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    const { data, error } = await supabaseAdmin
+      .from('official_schedules')
+      .delete()
+      .eq('day', day)
+      .eq('session', session)
+      .eq('room', room)
+      .select();
+
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) {
+      return { success: false, message: 'Jadwal resmi tidak ditemukan pada slot ini.' };
+    }
+
+    revalidatePath('/');
+    return { success: true, message: 'Jadwal resmi berhasil dihapus.' };
+  } catch (error: any) {
+    console.error('deleteOfficialSchedule error:', error);
+    return { success: false, message: error.message === 'Unauthorized: Admin authentication required.' ? error.message : 'Gagal menghapus jadwal resmi.' };
+  }
+}
+
+// ─── Announcements (Pengumuman) ──────────────────────────────
+
+export type AnnouncementType = 'info' | 'warning' | 'urgent';
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  type: AnnouncementType;
+  is_active: boolean;
+  expires_at: string;
+  created_at: string;
+}
+
+export async function createAnnouncement(
+  title: string, message: string, type: AnnouncementType, durationHours: number
+): Promise<ActionResult<Announcement>> {
+  try {
+    await requireAdmin();
+
+    if (!title || title.trim().length < 2) return { success: false, message: 'Judul minimal 2 karakter.' };
+    if (!message || message.trim().length < 2) return { success: false, message: 'Pesan minimal 2 karakter.' };
+    if (durationHours <= 0) return { success: false, message: 'Durasi tidak valid.' };
+
+    const expiresAt = new Date();
+    expiresAt.setTime(expiresAt.getTime() + durationHours * 60 * 60 * 1000);
+
+    const { data, error } = await supabaseAdmin.from('announcements').insert([{
+      title: title.trim(),
+      message: message.trim(),
+      type,
+      is_active: true,
+      expires_at: expiresAt.toISOString()
+    }]).select().single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/');
+    return { success: true, message: 'Pengumuman berhasil dibuat.', data };
+  } catch (error: any) {
+    console.error('createAnnouncement error:', error);
+    return { success: false, message: error.message === 'Unauthorized: Admin authentication required.' ? error.message : 'Gagal membuat pengumuman.' };
+  }
+}
+
+export async function deleteAnnouncement(id: string): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    const { error } = await supabaseAdmin.from('announcements').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/');
+    return { success: true, message: 'Pengumuman berhasil dihapus.' };
+  } catch (error: any) {
+    console.error('deleteAnnouncement error:', error);
+    return { success: false, message: error.message === 'Unauthorized: Admin authentication required.' ? error.message : 'Gagal menghapus pengumuman.' };
+  }
+}
+
+export async function toggleAnnouncementActive(id: string, isActive: boolean): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    const { error } = await supabaseAdmin.from('announcements').update({ is_active: isActive }).eq('id', id);
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/');
+    return { success: true, message: isActive ? 'Pengumuman diaktifkan.' : 'Pengumuman dinonaktifkan.' };
+  } catch (error: any) {
+    console.error('toggleAnnouncementActive error:', error);
+    return { success: false, message: error.message === 'Unauthorized: Admin authentication required.' ? error.message : 'Gagal mengubah status pengumuman.' };
+  }
+}
+
+export async function fetchActiveAnnouncements(): Promise<ActionResult<Announcement[]>> {
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .eq('is_active', true)
+      .gt('expires_at', now)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return { success: true, message: 'OK', data: data || [] };
+  } catch (error) {
+    console.error('fetchActiveAnnouncements error:', error);
+    return { success: false, message: 'Gagal memuat pengumuman.', data: [] };
+  }
+}
+
+export async function fetchAllAnnouncements(): Promise<ActionResult<Announcement[]>> {
+  try {
+    await requireAdmin();
+
+    const { data, error } = await supabaseAdmin
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return { success: true, message: 'OK', data: data || [] };
+  } catch (error: any) {
+    console.error('fetchAllAnnouncements error:', error);
+    return { success: false, message: error.message === 'Unauthorized: Admin authentication required.' ? error.message : 'Gagal memuat pengumuman.', data: [] };
   }
 }

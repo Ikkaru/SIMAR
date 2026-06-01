@@ -4,7 +4,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { BookingRequest, BookingStatus, Day, SessionNumber, RoomName, DAYS, getSessionTimes, getWeekDates } from '@/lib/types';
 import { 
   fetchAllBookings, fetchBookingStats, reviewBooking, logoutAdmin,
-  toggleSlotLock, removeBooking, updateBooking, fetchRoomStats
+  toggleSlotLock, removeBooking, updateBooking, fetchRoomStats,
+  addOfficialSchedule, editOfficialSchedule, deleteOfficialSchedule,
+  createAnnouncement, deleteAnnouncement, toggleAnnouncementActive, fetchAllAnnouncements,
+  Announcement, AnnouncementType
 } from '@/lib/actions';
 import DaySelector from './DaySelector';
 import ScheduleTable, { SlotDisplayData } from './ScheduleTable';
@@ -35,6 +38,13 @@ export default function AdminDashboard() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ namaPJ: '', namaMatakuliah: '', dosenPengampu: '', durasiPemakaian: 1 });
 
+  // Schedule Management State
+  const [scheduleEditMode, setScheduleEditMode] = useState(false);
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
+  const [scheduleCourseName, setScheduleCourseName] = useState('');
+  const [isAddingSchedule, setIsAddingSchedule] = useState(false);
+  const [newScheduleCourseName, setNewScheduleCourseName] = useState('');
+
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
@@ -54,6 +64,21 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Announcement State
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementFormOpen, setAnnouncementFormOpen] = useState(false);
+  const [annTitle, setAnnTitle] = useState('');
+  const [annMessage, setAnnMessage] = useState('');
+  const [annType, setAnnType] = useState<AnnouncementType>('info');
+  const [annDuration, setAnnDuration] = useState('24');
+
+  const loadAnnouncements = useCallback(async () => {
+    const res = await fetchAllAnnouncements();
+    if (res.success && res.data) setAnnouncements(res.data);
+  }, []);
+
+  useEffect(() => { loadAnnouncements(); }, [loadAnnouncements]);
 
   const filteredBookings = bookings.filter((b) => filter === 'all' || b.status === filter);
 
@@ -117,7 +142,57 @@ export default function AdminDashboard() {
     setInspectorData({ day, session, room, status: data.status, courseName: data.courseName, booking: data.booking });
     setLockNote(data.status === 'locked' ? data.courseName : '');
     setIsEditing(false);
+    setIsEditingSchedule(false);
+    setScheduleCourseName(data.courseName || '');
+    setIsAddingSchedule(false);
+    setNewScheduleCourseName('');
     setInspectorOpen(true);
+  };
+
+  // ─── Schedule CRUD Handlers ─────────────────────────────────
+  const handleAddSchedule = async () => {
+    if (!inspectorData) return;
+    const res = await addOfficialSchedule(
+      inspectorData.day, inspectorData.session, inspectorData.room, newScheduleCourseName
+    );
+    if (res.success) {
+      showToast(res.message, 'success');
+      setInspectorOpen(false);
+      setIsAddingSchedule(false);
+      setNewScheduleCourseName('');
+      setRefreshKey(k => k + 1);
+    } else {
+      showToast(res.message, 'error');
+    }
+  };
+
+  const handleEditSchedule = async () => {
+    if (!inspectorData) return;
+    const res = await editOfficialSchedule(
+      inspectorData.day, inspectorData.session, inspectorData.room, scheduleCourseName
+    );
+    if (res.success) {
+      showToast(res.message, 'success');
+      setIsEditingSchedule(false);
+      setInspectorOpen(false);
+      setRefreshKey(k => k + 1);
+    } else {
+      showToast(res.message, 'error');
+    }
+  };
+
+  const handleDeleteSchedule = async () => {
+    if (!inspectorData) return;
+    const res = await deleteOfficialSchedule(
+      inspectorData.day, inspectorData.session, inspectorData.room
+    );
+    if (res.success) {
+      showToast(res.message, 'success');
+      setInspectorOpen(false);
+      setRefreshKey(k => k + 1);
+    } else {
+      showToast(res.message, 'error');
+    }
   };
 
   const handleToggleLock = async (isLocking: boolean) => {
@@ -299,8 +374,19 @@ export default function AdminDashboard() {
       </div>
 
       <div className="glass-card mb-10 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Interaksi Jadwal & Inspeksi</h2>
+          <button
+            onClick={() => setScheduleEditMode(m => !m)}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-[13px] transition-all outline-none focus:ring-2 ${
+              scheduleEditMode
+                ? 'text-white bg-violet-600 border border-violet-700 hover:bg-violet-700 shadow-lg shadow-violet-600/20 focus:ring-violet-300'
+                : 'text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 hover:border-violet-300 focus:ring-violet-200'
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            {scheduleEditMode ? '✓ Mode Edit Jadwal Aktif' : 'Kelola Jadwal Resmi'}
+          </button>
         </div>
         <div className="p-6 lg:p-8">
           <DaySelector selectedDay={selectedDay} onSelectDay={setSelectedDay} />
@@ -412,6 +498,187 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Announcement Management Section */}
+      <div className="glass-card mb-10 overflow-hidden">
+        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Kelola Pengumuman</h2>
+            <p className="text-[13px] text-slate-500 mt-0.5">Buat pemberitahuan yang tampil di seluruh halaman website.</p>
+          </div>
+          <button
+            onClick={() => setAnnouncementFormOpen(o => !o)}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-[13px] transition-all outline-none focus:ring-2 ${
+              announcementFormOpen
+                ? 'text-slate-600 bg-slate-100 border border-slate-200 hover:bg-slate-200 focus:ring-slate-300'
+                : 'text-white bg-sky-600 border border-sky-700 hover:bg-sky-700 shadow-sm focus:ring-sky-300'
+            }`}
+          >
+            {announcementFormOpen ? 'Tutup Form' : '+ Buat Pengumuman'}
+          </button>
+        </div>
+
+        {/* Create Announcement Form */}
+        {announcementFormOpen && (
+          <div className="px-8 py-6 border-b border-slate-100 bg-sky-50/30">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">Judul Pengumuman</label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all"
+                  placeholder="misal: Perubahan Jadwal Kuliah Minggu Depan"
+                  value={annTitle}
+                  onChange={(e) => setAnnTitle(e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">Pesan / Detail</label>
+                <textarea
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all resize-none"
+                  rows={3}
+                  placeholder="Tuliskan detail pengumuman..."
+                  value={annMessage}
+                  onChange={(e) => setAnnMessage(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">Tipe</label>
+                <select
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all"
+                  value={annType}
+                  onChange={(e) => setAnnType(e.target.value as AnnouncementType)}
+                >
+                  <option value="info">ℹ️ Informasi (Biru)</option>
+                  <option value="warning">⚠️ Peringatan (Kuning)</option>
+                  <option value="urgent">🚨 Urgent / Penting (Merah)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">Durasi Tampil</label>
+                <select
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all"
+                  value={annDuration}
+                  onChange={(e) => setAnnDuration(e.target.value)}
+                >
+                  <option value="1">1 Jam</option>
+                  <option value="6">6 Jam</option>
+                  <option value="12">12 Jam</option>
+                  <option value="24">1 Hari (24 Jam)</option>
+                  <option value="72">3 Hari</option>
+                  <option value="168">7 Hari</option>
+                </select>
+              </div>
+            </div>
+            <button
+              className="px-6 py-2.5 rounded-xl font-bold text-[14px] text-white bg-sky-600 hover:bg-sky-700 transition-colors shadow-sm disabled:opacity-50"
+              disabled={isLoading}
+              onClick={async () => {
+                setIsLoading(true);
+                const res = await createAnnouncement(annTitle, annMessage, annType, parseFloat(annDuration));
+                setIsLoading(false);
+                if (res.success) {
+                  showToast(res.message, 'success');
+                  setAnnTitle(''); setAnnMessage(''); setAnnType('info'); setAnnDuration('24');
+                  setAnnouncementFormOpen(false);
+                  loadAnnouncements();
+                } else {
+                  showToast(res.message, 'error');
+                }
+              }}
+            >
+              {isLoading ? 'Membuat...' : 'Publikasikan Pengumuman'}
+            </button>
+          </div>
+        )}
+
+        {/* Announcements List */}
+        <div className="p-6 lg:p-8">
+          {announcements.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-3xl mb-4 text-slate-400">📢</div>
+              <h3 className="text-lg font-bold text-slate-800 mb-1">Belum ada pengumuman</h3>
+              <p className="text-[13px] text-slate-500">Buat pengumuman baru untuk ditampilkan di website.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {announcements.map((ann) => {
+                const now = new Date();
+                const expiresAt = new Date(ann.expires_at);
+                const isExpired = expiresAt < now;
+                const isActive = ann.is_active && !isExpired;
+
+                const typeLabels: Record<string, { label: string; color: string; bg: string }> = {
+                  info: { label: 'Info', color: 'text-sky-700', bg: 'bg-sky-100' },
+                  warning: { label: 'Peringatan', color: 'text-amber-700', bg: 'bg-amber-100' },
+                  urgent: { label: 'Urgent', color: 'text-rose-700', bg: 'bg-rose-100' },
+                };
+                const tl = typeLabels[ann.type] || typeLabels.info;
+
+                // Format remaining time
+                let timeLeft = '';
+                if (!isExpired) {
+                  const diffMs = expiresAt.getTime() - now.getTime();
+                  const diffH = Math.floor(diffMs / (1000 * 60 * 60));
+                  const diffM = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                  if (diffH > 24) timeLeft = `${Math.floor(diffH / 24)} hari ${diffH % 24} jam`;
+                  else if (diffH > 0) timeLeft = `${diffH} jam ${diffM} menit`;
+                  else timeLeft = `${diffM} menit`;
+                }
+
+                return (
+                  <div key={ann.id} className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center gap-4 transition-all ${
+                    isActive ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-50/50 border-slate-200/60 opacity-60'
+                  }`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${tl.bg} ${tl.color}`}>{tl.label}</span>
+                        {isActive && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />Aktif</span>}
+                        {isExpired && <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200 text-slate-500">Expired</span>}
+                        {!ann.is_active && !isExpired && <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200 text-slate-500">Nonaktif</span>}
+                      </div>
+                      <h4 className="text-[15px] font-extrabold text-slate-800 leading-snug">{ann.title}</h4>
+                      {ann.message !== ann.title && <p className="text-[13px] text-slate-500 mt-0.5 line-clamp-2">{ann.message}</p>}
+                      <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-400 font-medium">
+                        {!isExpired && <span>Sisa: {timeLeft}</span>}
+                        <span>Dibuat: {new Date(ann.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      {!isExpired && (
+                        <button
+                          className={`px-4 py-2 rounded-xl font-bold text-[12px] transition-colors border ${
+                            ann.is_active
+                              ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100'
+                              : 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                          }`}
+                          onClick={async () => {
+                            const res = await toggleAnnouncementActive(ann.id, !ann.is_active);
+                            if (res.success) { showToast(res.message, 'success'); loadAnnouncements(); }
+                            else showToast(res.message, 'error');
+                          }}
+                        >
+                          {ann.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                        </button>
+                      )}
+                      <button
+                        className="px-4 py-2 rounded-xl font-bold text-[12px] text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-colors"
+                        onClick={async () => {
+                          const res = await deleteAnnouncement(ann.id);
+                          if (res.success) { showToast(res.message, 'success'); loadAnnouncements(); }
+                          else showToast(res.message, 'error');
+                        }}
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Inspector Modal */}
       {inspectorOpen && inspectorData && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 sm:p-6 animate-[fadeIn_200ms_ease-out]" onClick={() => setInspectorOpen(false)}>
@@ -504,16 +771,102 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* Warning for Scheduled/Borrowed */}
+              {/* Scheduled/Borrowed — Read-only info OR Edit mode */}
               {(inspectorData.status === 'scheduled' || inspectorData.status === 'borrowed') && (
-                <div className="bg-amber-50/80 p-5 rounded-2xl border border-amber-200/60 flex gap-4 items-start mb-6">
-                  <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                scheduleEditMode ? (
+                  <div className="bg-violet-50/50 p-6 rounded-2xl border border-violet-200 mb-6">
+                    <h3 className="text-[15px] font-extrabold text-violet-900 mb-4 flex items-center gap-2">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      Kelola Jadwal Resmi
+                    </h3>
+
+                    {isEditingSchedule ? (
+                      <div className="flex flex-col gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-violet-700 uppercase tracking-widest mb-1.5">Nama Mata Kuliah</label>
+                          <input
+                            className="w-full px-4 py-2.5 bg-white border border-violet-200 rounded-xl text-[14px] focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none transition-all"
+                            placeholder="Nama Mata Kuliah"
+                            value={scheduleCourseName}
+                            onChange={(e) => setScheduleCourseName(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex gap-3">
+                          <button className="flex-1 px-4 py-2.5 rounded-xl font-bold text-[13px] text-white bg-violet-600 hover:bg-violet-700 transition-colors" onClick={handleEditSchedule}>Simpan Perubahan</button>
+                          <button className="px-4 py-2.5 rounded-xl font-bold text-[13px] text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors" onClick={() => setIsEditingSchedule(false)}>Batal</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-4">
+                        <div className="grid grid-cols-[100px_1fr] gap-2 border-b border-violet-100/50 pb-3">
+                          <span className="font-bold text-violet-800/70 text-[12px] uppercase tracking-wider">Mata Kuliah</span>
+                          <span className="font-semibold text-violet-900 text-[14px]">{inspectorData.courseName}</span>
+                        </div>
+                        <div className="flex gap-3 mt-1">
+                          <button
+                            className="px-5 py-2 rounded-xl font-bold text-[13px] text-violet-700 bg-white border border-violet-200 hover:bg-violet-50 transition-colors shadow-sm"
+                            onClick={() => { setScheduleCourseName(inspectorData.courseName); setIsEditingSchedule(true); }}
+                          >
+                            Edit Jadwal
+                          </button>
+                          <button
+                            className="px-5 py-2 rounded-xl font-bold text-[13px] text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-colors"
+                            onClick={handleDeleteSchedule}
+                          >
+                            Hapus Jadwal
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <h4 className="text-[14px] font-bold text-amber-900 mb-1">Jadwal Terkunci / Resmi</h4>
-                    <p className="text-[13px] text-amber-700/80 font-medium leading-relaxed">Ini adalah jadwal perkuliahan resmi. Jika Anda perlu mengosongkan atau mengganti jadwal ini secara paksa, Anda dapat menggunakan fitur <strong>Kunci Ruangan</strong> di bawah untuk menimpanya (override).</p>
+                ) : (
+                  <div className="bg-amber-50/80 p-5 rounded-2xl border border-amber-200/60 flex gap-4 items-start mb-6">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                    </div>
+                    <div>
+                      <h4 className="text-[14px] font-bold text-amber-900 mb-1">Jadwal Resmi</h4>
+                      <p className="text-[13px] text-amber-700/80 font-medium leading-relaxed">Ini adalah jadwal perkuliahan resmi. Untuk mengedit atau menghapus jadwal ini, aktifkan <strong>Mode Edit Jadwal</strong> dengan tombol <strong>"Kelola Jadwal Resmi"</strong> di atas tabel.</p>
+                    </div>
                   </div>
+                )
+              )}
+
+              {/* Add Schedule for Available Slots (only in edit mode) */}
+              {scheduleEditMode && inspectorData.status === 'available' && (
+                <div className="bg-violet-50/50 p-6 rounded-2xl border border-violet-200 mb-6">
+                  <h3 className="text-[15px] font-extrabold text-violet-900 mb-4 flex items-center gap-2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="12" y1="14" x2="12" y2="18" /><line x1="10" y1="16" x2="14" y2="16" /></svg>
+                    Tambah Jadwal Resmi
+                  </h3>
+
+                  {isAddingSchedule ? (
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-violet-700 uppercase tracking-widest mb-1.5">Nama Mata Kuliah</label>
+                        <input
+                          className="w-full px-4 py-2.5 bg-white border border-violet-200 rounded-xl text-[14px] focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none transition-all"
+                          placeholder="misal: Sistem Digital (A) (Semester 1)"
+                          value={newScheduleCourseName}
+                          onChange={(e) => setNewScheduleCourseName(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex gap-3">
+                        <button className="flex-1 px-4 py-2.5 rounded-xl font-bold text-[13px] text-white bg-violet-600 hover:bg-violet-700 transition-colors shadow-sm" onClick={handleAddSchedule}>Tambahkan Jadwal</button>
+                        <button className="px-4 py-2.5 rounded-xl font-bold text-[13px] text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors" onClick={() => setIsAddingSchedule(false)}>Batal</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-[13px] text-violet-700/80 font-medium leading-relaxed mb-4">Slot ini kosong. Anda bisa menambahkan jadwal resmi secara manual.</p>
+                      <button
+                        className="px-5 py-2.5 rounded-xl font-bold text-[13px] text-white bg-violet-600 hover:bg-violet-700 transition-colors shadow-sm"
+                        onClick={() => setIsAddingSchedule(true)}
+                      >
+                        + Tambah Jadwal Manual
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

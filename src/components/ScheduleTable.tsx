@@ -90,6 +90,9 @@ export default function ScheduleTable({
     } else if (displayData.status === 'available' && onSlotClick && !isPast) {
       const maxDur = getMaxDuration(session, room);
       onSlotClick(selectedDay, session, room, maxDur, displayData);
+    } else if (displayData.status !== 'available' && displayData.status !== 'locked' && onSlotClick) {
+      // Public mode: allow clicking occupied slots to view info
+      onSlotClick(selectedDay, session, room, 0, displayData);
     }
   }
 
@@ -163,13 +166,16 @@ export default function ScheduleTable({
       locked: 'bg-slate-50 border-slate-200 text-slate-400 shadow-none'
     };
 
+    const isClickable = display.status !== 'locked';
+
     return (
       <td key={room} className="p-0 align-middle">
         <div 
-          className={`${baseCell} ${styleMap[display.status]} ${adminMode ? 'cursor-pointer hover:shadow-lg hover:shadow-[#00a2e9]/10 hover:-translate-y-0.5 hover:border-[#00a2e9]/30' : ''}`}
+          className={`${baseCell} ${styleMap[display.status]} ${adminMode ? 'cursor-pointer hover:shadow-lg hover:shadow-[#00a2e9]/10 hover:-translate-y-0.5 hover:border-[#00a2e9]/30' : ''} ${!adminMode && isClickable ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-slate-300' : ''}`}
           onClick={() => handleSlotClick(session, room, display)}
-          role={adminMode ? "button" : undefined}
-          tabIndex={adminMode ? 0 : undefined}
+          role={adminMode || isClickable ? "button" : undefined}
+          tabIndex={adminMode || isClickable ? 0 : undefined}
+          onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleSlotClick(session, room, display); } : undefined}
         >
           <span className="font-bold line-clamp-3 leading-snug">{display.courseName}</span>
           
