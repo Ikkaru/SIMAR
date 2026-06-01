@@ -214,8 +214,11 @@ export default function ScheduleTable({
       </div>
 
       {/* Modern Spreadsheet Table */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm custom-scrollbar">
-        <table className="w-full min-w-[1200px] border-collapse">
+      <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm custom-scrollbar">
+        {isLoading && (
+          <div className="absolute inset-0 z-30 bg-white/40 backdrop-blur-[1px] cursor-not-allowed transition-all duration-300" />
+        )}
+        <table className={`w-full min-w-[1200px] border-collapse ${isLoading ? 'pointer-events-none' : ''}`}>
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="sticky left-0 top-0 z-20 bg-slate-50 text-slate-500 px-4 py-3.5 text-[11px] font-bold tracking-widest uppercase border-r border-slate-200 w-[100px]">
