@@ -74,9 +74,9 @@ export interface BookingRequest {
   namaMatakuliah: string;      // Nama Mata Kuliah
   dosenPengampu: string;       // Nama Dosen Pengampu
   status: BookingStatus;
-  createdAt: string;           // ISO date string
-  reviewedAt?: string;         // ISO date string (saat di-approve/reject)
-  reviewNote?: string;         // Catatan dari admin
+  createdAt: string | Date;           // ISO date string or Date obj
+  reviewedAt?: string | Date | null;  // ISO date string or Date obj
+  reviewNote?: string | null;         // Catatan dari admin
 }
 
 /** Form data untuk submit booking baru */

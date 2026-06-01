@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: simar-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: simar_user
+      POSTGRES_PASSWORD: simar_password
+      POSTGRES_DB: simar_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - simar_pgdata:/var/lib/postgresql/data
+
+  simar-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: simar-app:latest
+    container_name: simar-app
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    environment:
+      # Koneksi Database Lokal ke Container DB
+      - DATABASE_URL=postgresql://simar_user:simar_password@db:5432/simar_db?schema=public
+      
+      # Admin Credentials
+      - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
+      
+      # Next.js Settings
+      - NODE_ENV=production
+
+volumes:
+  simar_pgdata:

@@ -1,5 +1,6 @@
 import { BookingRequest, BookingStatus, Day, SessionNumber, RoomName, ROOM_LIST } from './types';
-import { supabase } from './supabase';
+import { prisma } from './prisma';
+import { Prisma } from '@prisma/client';
 
 export interface LockedSlot {
   id?: string;
@@ -20,69 +21,97 @@ export async function addBooking(
 ): Promise<BookingRequest | null> {
   const newId = generateId();
 
-  const { data: result, error } = await supabase.rpc('submit_booking_atomic', {
-    p_id: newId,
-    p_day: data.day,
-    p_session: data.session,
-    p_room: data.room,
-    p_duration: data.durasiPemakaian,
-    p_nama_pj: data.namaPJ,
-    p_nim: data.nim,
-    p_nama_matakuliah: data.namaMatakuliah,
-    p_dosen_pengampu: data.dosenPengampu
-  });
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Acquire advisory lock based on day and room string hash
+      const lockKeyStr = `${data.day}-${data.room}`;
+      let hash = 0;
+      for (let i = 0; i < lockKeyStr.length; i++) {
+        hash = Math.imul(31, hash) + lockKeyStr.charCodeAt(i) | 0;
+      }
+      
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${hash})`;
 
-  if (error) {
-    console.error('Error adding booking via RPC:', error);
+      // 2. Check for conflicts
+      const conflicts = await tx.booking.count({
+        where: {
+          day: data.day,
+          room: data.room,
+          status: { in: ['pending', 'approved'] },
+          AND: [
+            { session: { lte: data.session + data.durasiPemakaian - 1 } },
+            // Prisma doesn't have a direct way to do `session + durasiPemakaian - 1 >= data.session` in query syntax without raw
+            // So we use raw query for conflict checking to be perfectly equivalent
+          ]
+        }
+      });
+      
+      // Let's use raw query for perfect match with old logic
+      const rawConflicts = await tx.$queryRaw<{count: bigint}[]>`
+        SELECT COUNT(*) as count
+        FROM bookings
+        WHERE day = ${data.day}
+          AND room = ${data.room}
+          AND status IN ('pending', 'approved')
+          AND (session <= ${data.session + data.durasiPemakaian - 1})
+          AND (session + "durasiPemakaian" - 1 >= ${data.session})
+      `;
+      
+      if (Number(rawConflicts[0].count) > 0) {
+        throw new Error('Slot sudah terisi oleh booking lain.');
+      }
+
+      // 3. Insert new booking
+      const booking = await tx.booking.create({
+        data: {
+          id: newId,
+          day: data.day,
+          session: data.session,
+          room: data.room,
+          durasiPemakaian: data.durasiPemakaian,
+          namaPJ: data.namaPJ,
+          nim: data.nim,
+          namaMatakuliah: data.namaMatakuliah,
+          dosenPengampu: data.dosenPengampu,
+          status: 'pending'
+        }
+      });
+
+      return booking;
+    });
+
+    return result as BookingRequest;
+  } catch (error) {
+    console.error('Error adding booking via Prisma transaction:', error);
     return null;
   }
-
-  // result is the JSON returned by the RPC
-  if (!result || !result.success) {
-     console.error('RPC failed:', result?.message);
-     return null; 
-  }
-
-  const booking: BookingRequest = {
-    ...data,
-    id: newId,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  };
-
-  return booking;
 }
 
 export async function getAllBookings(): Promise<BookingRequest[]> {
-  const { data, error } = await supabase
-    .from('bookings')
-    .select('*')
-    .order('createdAt', { ascending: false });
-  if (error) return [];
+  const data = await prisma.booking.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
   return data as BookingRequest[];
 }
 
 export async function getBookingsByStatus(status: BookingStatus): Promise<BookingRequest[]> {
-  const { data, error } = await supabase
-    .from('bookings')
-    .select('*')
-    .eq('status', status)
-    .order('createdAt', { ascending: false });
-  if (error) return [];
+  const data = await prisma.booking.findMany({
+    where: { status },
+    orderBy: { createdAt: 'desc' }
+  });
   return data as BookingRequest[];
 }
 
 export async function getBookingsForSlot(
   day: Day, session: SessionNumber, room: RoomName
 ): Promise<BookingRequest[]> {
-  const { data, error } = await supabase
-    .from('bookings')
-    .select('*')
-    .eq('day', day)
-    .eq('room', room)
-    .neq('status', 'rejected');
-
-  if (error || !data) return [];
+  const data = await prisma.booking.findMany({
+    where: {
+      day,
+      room,
+      status: { not: 'rejected' }
+    }
+  });
 
   return (data as BookingRequest[]).filter(
     (b) => session >= b.session && session < b.session + b.durasiPemakaian
@@ -102,72 +131,87 @@ export async function isSlotBooked(
 export async function updateBookingStatus(
   id: string, status: 'approved' | 'rejected', note?: string
 ): Promise<BookingRequest | null> {
-  const updates: any = { status, reviewedAt: new Date().toISOString() };
-  if (note) updates.reviewNote = note;
-
-  const { data, error } = await supabase
-    .from('bookings')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) return null;
-  return data as BookingRequest;
+  try {
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: {
+        status,
+        reviewedAt: new Date(),
+        reviewNote: note
+      }
+    });
+    return updated as BookingRequest;
+  } catch (e) {
+    return null;
+  }
 }
 
 export async function getBookingById(id: string): Promise<BookingRequest | null> {
-  const { data, error } = await supabase.from('bookings').select('*').eq('id', id).single();
-  if (error) return null;
-  return data as BookingRequest;
+  const data = await prisma.booking.findUnique({ where: { id } });
+  return data as BookingRequest | null;
 }
 
 export async function deleteBooking(id: string): Promise<boolean> {
-  const { error } = await supabase.from('bookings').delete().eq('id', id);
-  return !error;
+  try {
+    await prisma.booking.delete({ where: { id } });
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 export async function clearResolvedBookings(): Promise<boolean> {
-  const { error } = await supabase
-    .from('bookings')
-    .delete()
-    .in('status', ['approved', 'rejected']);
-  return !error;
+  try {
+    await prisma.booking.deleteMany({
+      where: { status: { in: ['approved', 'rejected'] } }
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 export async function editBooking(
   id: string,
   updates: Partial<Pick<BookingRequest, 'namaPJ' | 'namaMatakuliah' | 'dosenPengampu' | 'durasiPemakaian'>>
 ): Promise<BookingRequest | null> {
-  const { data, error } = await supabase
-    .from('bookings')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) return null;
-  return data as BookingRequest;
+  try {
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: updates
+    });
+    return updated as BookingRequest;
+  } catch (e) {
+    return null;
+  }
 }
 
 export async function deleteAllBookings(): Promise<boolean> {
-  // Use neq to delete all rows. Delete requires a filter.
-  const { error } = await supabase.from('bookings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  return !error;
+  try {
+    await prisma.booking.deleteMany({});
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 export async function getBookingStats(): Promise<{
   total: number; pending: number; approved: number; rejected: number;
 }> {
-  const { data, error } = await supabase.from('bookings').select('status');
-  if (error || !data) return { total: 0, pending: 0, approved: 0, rejected: 0 };
-
-  return {
-    total: data.length,
-    pending: data.filter((b) => b.status === 'pending').length,
-    approved: data.filter((b) => b.status === 'approved').length,
-    rejected: data.filter((b) => b.status === 'rejected').length,
-  };
+  const groups = await prisma.booking.groupBy({
+    by: ['status'],
+    _count: true
+  });
+  
+  const stats = { total: 0, pending: 0, approved: 0, rejected: 0 };
+  groups.forEach(g => {
+    stats.total += g._count;
+    if (g.status === 'pending') stats.pending = g._count;
+    if (g.status === 'approved') stats.approved = g._count;
+    if (g.status === 'rejected') stats.rejected = g._count;
+  });
+  
+  return stats;
 }
 
 // ─── Lock System ─────────────────────────────────────────────
@@ -175,36 +219,34 @@ export async function getBookingStats(): Promise<{
 export async function isSlotLocked(
   day: Day, session: SessionNumber, room: RoomName
 ): Promise<LockedSlot | undefined> {
-  const { data, error } = await supabase
-    .from('locked_slots')
-    .select('*')
-    .eq('day', day)
-    .eq('session', session)
-    .eq('room', room)
-    .maybeSingle();
-  if (error || !data) return undefined;
-  return data as LockedSlot;
+  const data = await prisma.lockedSlot.findFirst({
+    where: { day, session, room }
+  });
+  return (data as LockedSlot) || undefined;
 }
 
 export async function lockSlot(day: Day, session: SessionNumber, room: RoomName, note?: string) {
-  await supabase.from('locked_slots').delete().match({ day, session, room });
-  await supabase.from('locked_slots').insert([{ day, session, room, note }]);
+  await prisma.$transaction([
+    prisma.lockedSlot.deleteMany({ where: { day, session, room } }),
+    prisma.lockedSlot.create({ data: { day, session, room, note: note || '' } })
+  ]);
 }
 
 export async function unlockSlot(day: Day, session: SessionNumber, room: RoomName) {
-  await supabase.from('locked_slots').delete().match({ day, session, room });
+  await prisma.lockedSlot.deleteMany({ where: { day, session, room } });
 }
 
 export async function getAllLockedSlots(): Promise<LockedSlot[]> {
-  const { data, error } = await supabase.from('locked_slots').select('*');
-  if (error) return [];
+  const data = await prisma.lockedSlot.findMany();
   return data as LockedSlot[];
 }
 
 export async function getRoomUsageStats(): Promise<{ room: RoomName; bookedCount: number; approvedCount: number }[]> {
-  const { data, error } = await supabase.from('bookings').select('room, status').neq('status', 'rejected');
-  if (error || !data) return ROOM_LIST.map((room) => ({ room, bookedCount: 0, approvedCount: 0 }));
-
+  const data = await prisma.booking.findMany({
+    where: { status: { not: 'rejected' } },
+    select: { room: true, status: true }
+  });
+  
   return ROOM_LIST.map((room) => ({
     room,
     bookedCount: data.filter((b) => b.room === room).length,
@@ -217,19 +259,16 @@ export async function getRoomUsageStats(): Promise<{ room: RoomName; bookedCount
 export async function searchBookingsByNimOrId(
   query: string
 ): Promise<BookingRequest[]> {
-  // Search by exact booking ID or NIM match concurrently
-  const [
-    { data: byId },
-    { data: byNim }
-  ] = await Promise.all([
-    supabase.from('bookings').select('*').ilike('id', `%${query}%`).order('createdAt', { ascending: false }).limit(20),
-    supabase.from('bookings').select('*').ilike('nim', `%${query}%`).order('createdAt', { ascending: false }).limit(20)
-  ]);
-
-  // Merge and deduplicate
-  const merged = new Map<string, BookingRequest>();
-  for (const item of [...(byId || []), ...(byNim || [])]) {
-    merged.set(item.id, item as BookingRequest);
-  }
-  return Array.from(merged.values());
+  const data = await prisma.booking.findMany({
+    where: {
+      OR: [
+        { id: { contains: query, mode: 'insensitive' } },
+        { nim: { contains: query, mode: 'insensitive' } }
+      ]
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20
+  });
+  
+  return data as BookingRequest[];
 }

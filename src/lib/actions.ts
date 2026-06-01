@@ -13,7 +13,7 @@ import {
   deleteBooking, editBooking, getBookingById, getRoomUsageStats, deleteAllBookings,
 } from './store';
 import { cookies } from 'next/headers';
-import { supabase, supabaseAdmin } from './supabase';
+import { prisma } from './prisma';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { verifyAdminSession as verifyAdmin, requireAdmin } from './auth-guard';
@@ -80,7 +80,7 @@ export async function submitBooking(
     });
 
     if (!booking) {
-      return { success: false, message: 'Gagal menyimpan booking ke database.' };
+      return { success: false, message: 'Slot sudah terisi atau gagal menyimpan booking ke database.' };
     }
 
     return {
@@ -88,9 +88,9 @@ export async function submitBooking(
       message: `Booking berhasil diajukan (ID: ${booking.id}). Mohon tunggu konfirmasi Admin Prodi.`,
       data: booking,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('submitBooking error:', error);
-    return { success: false, message: 'Terjadi kesalahan server.' };
+    return { success: false, message: error.message || 'Terjadi kesalahan server.' };
   }
 }
 
@@ -171,11 +171,10 @@ export async function fetchDayOverrides(day: Day): Promise<ActionResult<Record<s
     const baseSlots = scheduleRes.success && scheduleRes.data ? scheduleRes.data : [];
 
     // Bulk fetch to prevent N+1 queries
-    const { data: lockedSlotsData } = await supabase.from('locked_slots').select('*').eq('day', day);
-    const lockedSlotsMap = new Map((lockedSlotsData || []).map((l: any) => [`${l.session}-${l.room}`, l]));
+    const lockedSlotsData = await prisma.lockedSlot.findMany({ where: { day } });
+    const lockedSlotsMap = new Map((lockedSlotsData || []).map((l) => [`${l.session}-${l.room}`, l]));
 
-    const { data: bookingsData } = await supabase.from('bookings').select('*').eq('day', day).neq('status', 'rejected');
-    const bookingsList = (bookingsData || []) as BookingRequest[];
+    const bookingsList = await prisma.booking.findMany({ where: { day, status: { not: 'rejected' } } }) as BookingRequest[];
 
     // Map ALL slots from the DB as overrides to replace the hardcoded base layer
     for (const slot of baseSlots) {
@@ -287,20 +286,23 @@ export async function getAvailableRoomsSummary(): Promise<
     };
 
     // Bulk fetch ALL data to avoid sequential queries in loop
-    const { data: lockedSlotsData } = await supabase.from('locked_slots').select('*');
-    const { data: bookingsData } = await supabase.from('bookings').select('*').neq('status', 'rejected');
-    const { data: officialSchedulesData } = await supabase.from('official_schedules').select('*');
+    const allLocked = await prisma.lockedSlot.findMany();
+    const bookingsData = await prisma.booking.findMany({ where: { status: { not: 'rejected' } } });
+    const allOfficialSchedules = await prisma.officialSchedule.findMany();
     
     const dates = getWeekDates();
     const dateStrings = DAYS.map(d => dates[d].dateObj.toISOString().split('T')[0]);
-    const { data: fullLockedData } = await supabase.from('locked_rooms')
-      .select('*')
-      .or(`is_permanent.eq.true,locked_date.in.(${dateStrings.join(',')})`);
+    
+    const allFullLocked = await prisma.lockedRoom.findMany({
+      where: {
+        OR: [
+          { isPermanent: true },
+          { lockedDate: { in: dateStrings } }
+        ]
+      }
+    });
 
-    const allLocked = lockedSlotsData || [];
-    const allBookings = (bookingsData || []) as BookingRequest[];
-    const allFullLocked = fullLockedData || [];
-    const allOfficialSchedules = officialSchedulesData || [];
+    const allBookings = bookingsData as BookingRequest[];
 
     for (const day of DAYS) {
       const sessionTimes = getSessionTimes(day);
@@ -313,11 +315,11 @@ export async function getAvailableRoomsSummary(): Promise<
           if (isScheduled) continue; // Not available
 
           // Check full room lock
-          const isRoomLocked = allFullLocked.some(l => l.room === room && (l.is_permanent || l.locked_date === currentDateStr));
+          const isRoomLocked = allFullLocked.some(l => l.room === room && (l.isPermanent || l.lockedDate === currentDateStr));
           if (isRoomLocked) continue;
 
           // Check slot lock
-          const isLocked = allLocked.some((l: any) => l.day === day && l.session === s && l.room === room);
+          const isLocked = allLocked.some((l) => l.day === day && l.session === s && l.room === room);
           if (isLocked) continue;
 
           // Check bookings
@@ -363,16 +365,13 @@ export async function loginAdmin(password: string): Promise<ActionResult> {
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
       
-      const { error } = await supabaseAdmin.from('admin_sessions').insert([{ 
-        token, 
-        expires_at: expiresAt.toISOString() 
-      }]);
+      await prisma.adminSession.create({
+        data: {
+          token,
+          expiresAt
+        }
+      });
       
-      if (error) {
-        console.error('Failed to create session:', error);
-        return { success: false, message: 'Terjadi kesalahan sistem' };
-      }
-
       const cookieStore = await cookies();
       cookieStore.set('admin_session', token, { 
         httpOnly: true, 
@@ -396,7 +395,7 @@ export async function logoutAdmin(): Promise<ActionResult> {
     const token = cookieStore.get('admin_session')?.value;
     
     if (token) {
-      await supabaseAdmin.from('admin_sessions').delete().eq('token', token);
+      await prisma.adminSession.delete({ where: { token } }).catch(() => {});
     }
     cookieStore.delete('admin_session');
     return { success: true, message: 'Logout berhasil' };
@@ -432,7 +431,7 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
   try {
     await requireAdmin();
 
-    if (!/^\d{4}$/.test(tahunAjar) || !['1', '2'].includes(idSemester)) {
+    if (!/^\\d{4}$/.test(tahunAjar) || !['1', '2'].includes(idSemester)) {
       return { success: false, message: 'Parameter tahun ajar atau semester tidak valid.' };
     }
 
@@ -526,7 +525,7 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
               day: hari,
               session: sesi,
               room: matchedRoom,
-              course_name: `${mataKuliah} (${kelas}) (Semester ${semester})`
+              courseName: `${mataKuliah} (${kelas}) (Semester ${semester})`
             });
           }
         }
@@ -534,9 +533,10 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
     }
 
     if (toInsert.length > 0) {
-      await supabaseAdmin.from('official_schedules').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      const { error } = await supabaseAdmin.from('official_schedules').insert(toInsert);
-      if (error) throw new Error(error.message);
+      await prisma.$transaction([
+        prisma.officialSchedule.deleteMany({}),
+        prisma.officialSchedule.createMany({ data: toInsert })
+      ]);
       totalSynced = toInsert.length;
     }
 
@@ -550,25 +550,19 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
 
 export async function fetchScheduleForDay(day: Day): Promise<ActionResult<ScheduleSlot[]>> {
   try {
-    const { supabase } = await import('./supabase');
-    const { data, error } = await supabase
-      .from('official_schedules')
-      .select('*')
-      .eq('day', day);
-
-    if (error) throw new Error(error.message);
+    const data = await prisma.officialSchedule.findMany({ where: { day } });
 
     const slots: ScheduleSlot[] = [];
     for (let s = 1; s <= 11; s++) {
       ROOM_LIST.forEach(room => {
-        const dbSlot = (data || []).find(d => d.session === s && d.room === room);
+        const dbSlot = data.find(d => d.session === s && d.room === room);
         if (dbSlot) {
           slots.push({
             day,
             session: s as SessionNumber,
             room,
-            courseName: dbSlot.course_name,
-            status: dbSlot.course_name.toLowerCase().includes('dipinjam') || dbSlot.course_name.toLowerCase().includes('digunakan') ? 'borrowed' : 'scheduled'
+            courseName: dbSlot.courseName,
+            status: dbSlot.courseName.toLowerCase().includes('dipinjam') || dbSlot.courseName.toLowerCase().includes('digunakan') ? 'borrowed' : 'scheduled'
           });
         } else {
           slots.push({
@@ -602,11 +596,12 @@ export async function autoCleanOldBookings() {
     const diff = day === 6 ? 0 : day + 1;
     d.setDate(d.getDate() - diff);
     d.setHours(0, 0, 0, 0);
-    const cutoff = d.toISOString();
     
-    // Automatically delete bookings older than the most recent Saturday
-    const { supabaseAdmin: adminDb } = await import('./supabase');
-    await adminDb.from('bookings').delete().lt('createdAt', cutoff);
+    await prisma.booking.deleteMany({
+      where: {
+        createdAt: { lt: d }
+      }
+    });
   } catch (error) {
     console.error('Auto clean failed:', error);
   }
@@ -625,26 +620,22 @@ export async function addOfficialSchedule(
     }
 
     // Check for duplicates
-    const { data: existing } = await supabaseAdmin
-      .from('official_schedules')
-      .select('id')
-      .eq('day', day)
-      .eq('session', session)
-      .eq('room', room)
-      .limit(1);
+    const existing = await prisma.officialSchedule.findFirst({
+      where: { day, session, room }
+    });
 
-    if (existing && existing.length > 0) {
+    if (existing) {
       return { success: false, message: 'Slot ini sudah memiliki jadwal resmi. Gunakan fitur edit untuk mengubahnya.' };
     }
 
-    const { error } = await supabaseAdmin.from('official_schedules').insert([{
-      day,
-      session,
-      room,
-      course_name: courseName.trim()
-    }]);
-
-    if (error) throw new Error(error.message);
+    await prisma.officialSchedule.create({
+      data: {
+        day,
+        session,
+        room,
+        courseName: courseName.trim()
+      }
+    });
 
     revalidatePath('/');
     return { success: true, message: 'Jadwal resmi berhasil ditambahkan.' };
@@ -664,16 +655,12 @@ export async function editOfficialSchedule(
       return { success: false, message: 'Nama mata kuliah minimal 2 karakter.' };
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('official_schedules')
-      .update({ course_name: newCourseName.trim() })
-      .eq('day', day)
-      .eq('session', session)
-      .eq('room', room)
-      .select();
+    const updated = await prisma.officialSchedule.updateMany({
+      where: { day, session, room },
+      data: { courseName: newCourseName.trim() }
+    });
 
-    if (error) throw new Error(error.message);
-    if (!data || data.length === 0) {
+    if (updated.count === 0) {
       return { success: false, message: 'Jadwal resmi tidak ditemukan pada slot ini.' };
     }
 
@@ -691,16 +678,11 @@ export async function deleteOfficialSchedule(
   try {
     await requireAdmin();
 
-    const { data, error } = await supabaseAdmin
-      .from('official_schedules')
-      .delete()
-      .eq('day', day)
-      .eq('session', session)
-      .eq('room', room)
-      .select();
+    const deleted = await prisma.officialSchedule.deleteMany({
+      where: { day, session, room }
+    });
 
-    if (error) throw new Error(error.message);
-    if (!data || data.length === 0) {
+    if (deleted.count === 0) {
       return { success: false, message: 'Jadwal resmi tidak ditemukan pada slot ini.' };
     }
 
@@ -720,10 +702,10 @@ export interface Announcement {
   id: string;
   title: string;
   message: string;
-  type: AnnouncementType;
-  is_active: boolean;
-  expires_at: string;
-  created_at: string;
+  type: AnnouncementType | string;
+  isActive: boolean;
+  expiresAt: string | Date;
+  createdAt: string | Date;
 }
 
 export async function createAnnouncement(
@@ -739,15 +721,15 @@ export async function createAnnouncement(
     const expiresAt = new Date();
     expiresAt.setTime(expiresAt.getTime() + durationHours * 60 * 60 * 1000);
 
-    const { data, error } = await supabaseAdmin.from('announcements').insert([{
-      title: title.trim(),
-      message: message.trim(),
-      type,
-      is_active: true,
-      expires_at: expiresAt.toISOString()
-    }]).select().single();
-
-    if (error) throw new Error(error.message);
+    const data = await prisma.announcement.create({
+      data: {
+        title: title.trim(),
+        message: message.trim(),
+        type,
+        isActive: true,
+        expiresAt
+      }
+    });
 
     revalidatePath('/');
     return { success: true, message: 'Pengumuman berhasil dibuat.', data };
@@ -761,8 +743,7 @@ export async function deleteAnnouncement(id: string): Promise<ActionResult> {
   try {
     await requireAdmin();
 
-    const { error } = await supabaseAdmin.from('announcements').delete().eq('id', id);
-    if (error) throw new Error(error.message);
+    await prisma.announcement.delete({ where: { id } });
 
     revalidatePath('/');
     return { success: true, message: 'Pengumuman berhasil dihapus.' };
@@ -776,8 +757,10 @@ export async function toggleAnnouncementActive(id: string, isActive: boolean): P
   try {
     await requireAdmin();
 
-    const { error } = await supabaseAdmin.from('announcements').update({ is_active: isActive }).eq('id', id);
-    if (error) throw new Error(error.message);
+    await prisma.announcement.update({
+      where: { id },
+      data: { isActive }
+    });
 
     revalidatePath('/');
     return { success: true, message: isActive ? 'Pengumuman diaktifkan.' : 'Pengumuman dinonaktifkan.' };
@@ -789,15 +772,14 @@ export async function toggleAnnouncementActive(id: string, isActive: boolean): P
 
 export async function fetchActiveAnnouncements(): Promise<ActionResult<Announcement[]>> {
   try {
-    const now = new Date().toISOString();
-    const { data, error } = await supabase
-      .from('announcements')
-      .select('*')
-      .eq('is_active', true)
-      .gt('expires_at', now)
-      .order('created_at', { ascending: false });
+    const data = await prisma.announcement.findMany({
+      where: {
+        isActive: true,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
 
-    if (error) throw new Error(error.message);
     return { success: true, message: 'OK', data: data || [] };
   } catch (error) {
     console.error('fetchActiveAnnouncements error:', error);
@@ -809,12 +791,10 @@ export async function fetchAllAnnouncements(): Promise<ActionResult<Announcement
   try {
     await requireAdmin();
 
-    const { data, error } = await supabaseAdmin
-      .from('announcements')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const data = await prisma.announcement.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
 
-    if (error) throw new Error(error.message);
     return { success: true, message: 'OK', data: data || [] };
   } catch (error: any) {
     console.error('fetchAllAnnouncements error:', error);

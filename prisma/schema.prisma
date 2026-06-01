@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Booking {
+  id              String   @id @default(uuid())
+  day             String
+  session         Int
+  room            String
+  namaPJ          String
+  nim             String
+  durasiPemakaian Int
+  namaMatakuliah  String
+  dosenPengampu   String
+  status          String   @default("pending")
+  createdAt       DateTime @default(now())
+  reviewedAt      DateTime?
+  reviewNote      String?
+
+  @@index([day, room])
+  @@map("bookings")
+}
+
+model LockedSlot {
+  id      String  @id @default(uuid())
+  day     String
+  session Int
+  room    String
+  note    String?
+
+  @@unique([day, session, room])
+  @@map("locked_slots")
+}
+
+model LockedRoom {
+  id           String   @id @default(uuid())
+  room         String
+  lockedDate   String?  @map("locked_date")
+  isPermanent  Boolean  @default(false) @map("is_permanent")
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("locked_rooms")
+}
+
+model OfficialSchedule {
+  id           String   @id @default(uuid())
+  day          String
+  session      Int
+  room         String
+  courseName   String   @map("course_name")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([day, session, room])
+  @@map("official_schedules")
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  type      String   @default("info")
+  isActive  Boolean  @default(true) @map("is_active")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("announcements")
+}
+
+model AdminSession {
+  token      String   @id
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("admin_sessions")
+}

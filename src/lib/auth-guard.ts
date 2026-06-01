@@ -1,11 +1,11 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { supabaseAdmin } from './supabase';
+import { prisma } from './prisma';
 
 /**
  * Verifikasi apakah request berasal dari admin yang terautentikasi.
- * Membaca cookie `admin_session`, lalu validasi terhadap tabel `admin_sessions` di Supabase.
+ * Membaca cookie `admin_session`, lalu validasi terhadap tabel `admin_sessions` di Prisma.
  */
 export async function verifyAdminSession(): Promise<boolean> {
   try {
@@ -14,19 +14,17 @@ export async function verifyAdminSession(): Promise<boolean> {
 
     if (!sessionToken) return false;
 
-    const { data, error } = await supabaseAdmin
-      .from('admin_sessions')
-      .select('id, expires_at')
-      .eq('token', sessionToken)
-      .maybeSingle();
+    const session = await prisma.adminSession.findUnique({
+      where: { token: sessionToken },
+      select: { token: true, expiresAt: true }
+    });
 
-    if (error || !data) return false;
+    if (!session) return false;
 
     // Cek apakah session sudah expired
-    const expiresAt = new Date(data.expires_at);
-    if (expiresAt < new Date()) {
+    if (session.expiresAt < new Date()) {
       // Hapus expired session
-      await supabaseAdmin.from('admin_sessions').delete().eq('id', data.id);
+      await prisma.adminSession.delete({ where: { token: session.token } });
       return false;
     }
 

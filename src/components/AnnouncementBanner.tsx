@@ -59,7 +59,7 @@ export default function AnnouncementBanner() {
   return (
     <div className="flex flex-col">
       {visible.map((announcement) => {
-        const cfg = typeConfig[announcement.type] || typeConfig.info;
+        const cfg = typeConfig[announcement.type as keyof typeof typeConfig] || typeConfig.info;
 
         return (
           <div

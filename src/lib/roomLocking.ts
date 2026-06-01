@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { prisma } from './prisma';
 import { RoomName } from './types';
 
 export interface LockedRoom {
@@ -22,60 +22,75 @@ export async function lockRoomFull(
   dates: string[],
   note?: string
 ): Promise<boolean> {
-  // Hapus semua kunci yang ada untuk ruangan ini terlebih dahulu agar tidak double
-  await unlockRoomFull(room);
+  try {
+    // Hapus semua kunci yang ada untuk ruangan ini terlebih dahulu agar tidak double
+    await unlockRoomFull(room);
 
-  let payload: any[] = [];
+    let payload: any[] = [];
 
-  if (type === 'permanent') {
-    payload.push({
-      room,
-      is_permanent: true,
-      locked_date: null,
-      note: note || null
-    });
-  } else {
-    // Untuk 'day' dan 'week', kita insert setiap tanggal
-    payload = dates.map(d => ({
-      room,
-      is_permanent: false,
-      locked_date: d,
-      note: note || null
-    }));
-  }
+    if (type === 'permanent') {
+      payload.push({
+        room,
+        isPermanent: true,
+        lockedDate: null,
+        note: note || null
+      });
+    } else {
+      // Untuk 'day' dan 'week', kita insert setiap tanggal
+      payload = dates.map(d => ({
+        room,
+        isPermanent: false,
+        lockedDate: d,
+        note: note || null
+      }));
+    }
 
-  const { error } = await supabase.from('locked_rooms').insert(payload);
-  
-  if (error) {
+    await prisma.lockedRoom.createMany({ data: payload });
+    return true;
+  } catch (error) {
     console.error('Error locking room:', error);
     return false;
   }
-  return true;
 }
 
 /**
  * Membuka kunci seluruh ruangan
  */
 export async function unlockRoomFull(room: RoomName): Promise<boolean> {
-  const { error } = await supabase.from('locked_rooms').delete().eq('room', room);
-  if (error) {
+  try {
+    await prisma.lockedRoom.deleteMany({ where: { room } });
+    return true;
+  } catch (error) {
     console.error('Error unlocking room:', error);
     return false;
   }
-  return true;
 }
 
 /**
  * Mengambil semua data ruangan yang terkunci pada tanggal tertentu atau secara permanen
  */
 export async function getLockedRoomsForDate(dateStr: string): Promise<LockedRoom[]> {
-  const { data, error } = await supabase
-    .from('locked_rooms')
-    .select('*')
-    .or(`locked_date.eq.${dateStr},is_permanent.eq.true`);
+  try {
+    const data = await prisma.lockedRoom.findMany({
+      where: {
+        OR: [
+          { lockedDate: dateStr },
+          { isPermanent: true }
+        ]
+      }
+    });
     
-  if (error || !data) return [];
-  return data as LockedRoom[];
+    return data.map(d => ({
+      id: d.id,
+      room: d.room as RoomName,
+      locked_date: d.lockedDate,
+      is_permanent: d.isPermanent,
+      note: d.note
+    }));
+  } catch (error) {
+    console.error('Error fetching locked rooms:', error);
+    return [];
+  }
 }
 
 /**

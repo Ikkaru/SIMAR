@@ -603,9 +603,9 @@ export default function AdminDashboard() {
             <div className="flex flex-col gap-4">
               {announcements.map((ann) => {
                 const now = new Date();
-                const expiresAt = new Date(ann.expires_at);
+                const expiresAt = new Date(ann.expiresAt);
                 const isExpired = expiresAt < now;
-                const isActive = ann.is_active && !isExpired;
+                const isActive = ann.isActive && !isExpired;
 
                 const typeLabels: Record<string, { label: string; color: string; bg: string }> = {
                   info: { label: 'Info', color: 'text-sky-700', bg: 'bg-sky-100' },
@@ -634,30 +634,30 @@ export default function AdminDashboard() {
                         <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${tl.bg} ${tl.color}`}>{tl.label}</span>
                         {isActive && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />Aktif</span>}
                         {isExpired && <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200 text-slate-500">Expired</span>}
-                        {!ann.is_active && !isExpired && <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200 text-slate-500">Nonaktif</span>}
+                        {!ann.isActive && !isExpired && <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200 text-slate-500">Nonaktif</span>}
                       </div>
                       <h4 className="text-[15px] font-extrabold text-slate-800 leading-snug">{ann.title}</h4>
                       {ann.message !== ann.title && <p className="text-[13px] text-slate-500 mt-0.5 line-clamp-2">{ann.message}</p>}
                       <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-400 font-medium">
                         {!isExpired && <span>Sisa: {timeLeft}</span>}
-                        <span>Dibuat: {new Date(ann.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>Dibuat: {new Date(ann.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
                       {!isExpired && (
                         <button
                           className={`px-4 py-2 rounded-xl font-bold text-[12px] transition-colors border ${
-                            ann.is_active
+                            ann.isActive
                               ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100'
                               : 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
                           }`}
                           onClick={async () => {
-                            const res = await toggleAnnouncementActive(ann.id, !ann.is_active);
+                            const res = await toggleAnnouncementActive(ann.id, !ann.isActive);
                             if (res.success) { showToast(res.message, 'success'); loadAnnouncements(); }
                             else showToast(res.message, 'error');
                           }}
                         >
-                          {ann.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                          {ann.isActive ? 'Nonaktifkan' : 'Aktifkan'}
                         </button>
                       )}
                       <button
