@@ -18,7 +18,7 @@ export interface LockedRoom {
  */
 export async function lockRoomFull(
   room: RoomName,
-  type: 'day' | 'week' | 'permanent',
+  type: 'day' | 'week' | 'permanent' | 'custom',
   dates: string[],
   note?: string
 ): Promise<boolean> {

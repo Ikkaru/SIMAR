@@ -234,7 +234,7 @@ import { lockRoomFull, unlockRoomFull } from './roomLocking';
 
 export async function setRoomLockFull(
   room: RoomName,
-  type: 'day' | 'week' | 'permanent',
+  type: 'day' | 'week' | 'permanent' | 'custom',
   dates: string[],
   note?: string
 ): Promise<ActionResult> {

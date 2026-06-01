@@ -211,7 +211,8 @@ export default function AdminDashboard() {
   // Full Room Lock State
   const [roomLockModalOpen, setRoomLockModalOpen] = useState(false);
   const [selectedRoomToLock, setSelectedRoomToLock] = useState<RoomName | null>(null);
-  const [roomLockType, setRoomLockType] = useState<'day' | 'week' | 'permanent'>('day');
+  const [roomLockType, setRoomLockType] = useState<'day' | 'permanent' | 'custom'>('day');
+  const [roomLockCustomDate, setRoomLockCustomDate] = useState('');
   const [roomLockNote, setRoomLockNote] = useState('');
   const [isCurrentlyLocked, setIsCurrentlyLocked] = useState(false);
 
@@ -227,6 +228,7 @@ export default function AdminDashboard() {
     setSelectedRoomToLock(room);
     setIsCurrentlyLocked(isLocked);
     setRoomLockType('day');
+    setRoomLockCustomDate('');
     setRoomLockNote(currentNote || '');
     setRoomLockModalOpen(true);
   };
@@ -238,8 +240,31 @@ export default function AdminDashboard() {
     let lockDates: string[] = [];
     if (roomLockType === 'day') {
       lockDates = [dates[selectedDay].dateObj.toISOString().split('T')[0]];
-    } else if (roomLockType === 'week') {
-      lockDates = DAYS.map(d => dates[d].dateObj.toISOString().split('T')[0]);
+    } else if (roomLockType === 'custom') {
+      if (!roomLockCustomDate) {
+        showToast('Pilih tanggal akhir kustom terlebih dahulu', 'error');
+        setIsLoading(false);
+        return;
+      }
+      
+      const startDateStr = dates[selectedDay].dateObj.toISOString().split('T')[0];
+      const start = new Date(startDateStr);
+      const end = new Date(roomLockCustomDate);
+      
+      const current = new Date(start);
+      while (current <= end) {
+        // Only lock Monday-Friday (1-5)
+        if (current.getDay() !== 0 && current.getDay() !== 6) {
+          lockDates.push(current.toISOString().split('T')[0]);
+        }
+        current.setDate(current.getDate() + 1);
+      }
+      
+      if (lockDates.length === 0) {
+        showToast('Tanggal akhir tidak valid atau hanya jatuh di akhir pekan', 'error');
+        setIsLoading(false);
+        return;
+      }
     }
 
     const { setRoomLockFull } = await import('@/lib/actions');
@@ -933,13 +958,26 @@ export default function AdminDashboard() {
                   <button className={`px-3 py-2.5 border rounded-xl text-[12px] font-bold transition-all ${roomLockType === 'day' ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`} onClick={() => setRoomLockType('day')}>
                     1 Hari<br/><span className="text-[10px] font-normal opacity-80">(Hari ini)</span>
                   </button>
-                  <button className={`px-3 py-2.5 border rounded-xl text-[12px] font-bold transition-all ${roomLockType === 'week' ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`} onClick={() => setRoomLockType('week')}>
-                    1 Minggu<br/><span className="text-[10px] font-normal opacity-80">(5 Hari)</span>
-                  </button>
                   <button className={`px-3 py-2.5 border rounded-xl text-[12px] font-bold transition-all ${roomLockType === 'permanent' ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`} onClick={() => setRoomLockType('permanent')}>
                     Seterusnya<br/><span className="text-[10px] font-normal opacity-80">(Permanen)</span>
                   </button>
+                  <button className={`px-3 py-2.5 border rounded-xl text-[12px] font-bold transition-all ${roomLockType === 'custom' ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`} onClick={() => setRoomLockType('custom')}>
+                    Kustom<br/><span className="text-[10px] font-normal opacity-80">(Pilih Tanggal)</span>
+                  </button>
                 </div>
+                
+                {roomLockType === 'custom' && (
+                  <div>
+                    <label className="block text-[12px] font-bold text-slate-700 mb-2">Sampai Tanggal</label>
+                    <input 
+                      type="date" 
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[14px] focus:bg-white focus:border-slate-400 focus:ring-4 focus:ring-slate-400/10 outline-none transition-all" 
+                      value={roomLockCustomDate} 
+                      onChange={(e) => setRoomLockCustomDate(e.target.value)}
+                      min={dates?.[selectedDay]?.dateObj.toISOString().split('T')[0]}
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
