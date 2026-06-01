@@ -31,7 +31,7 @@ export default function Header() {
           />
           <div className="flex flex-col">
             <span className="text-xl font-bold text-slate-800 tracking-tight leading-tight">SIMAR</span>
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Prodi Informatika UNS</span>
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">FATISDA UNS</span>
           </div>
         </Link>
 

@@ -174,7 +174,7 @@ export function getWeekDates(): Record<Day, { dateObj: Date; formatted: string }
 /** Helper: Cek apakah hari ini sudah lewat (untuk disable booking) */
 export function isDayPast(dayName: Day): boolean {
   const dates = getWeekDates();
-  const targetDateObj = dates[dayName].dateObj;
+  const targetDateObj = new Date(dates[dayName].dateObj); // Clone to avoid mutation
   
   // Set target date ke akhir hari tersebut agar bisa di-booking sampai jam 23:59 hari itu
   targetDateObj.setHours(23, 59, 59, 999);

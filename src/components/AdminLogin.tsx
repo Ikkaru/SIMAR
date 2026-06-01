@@ -12,6 +12,8 @@ export default function AdminLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [showPassword, setShowPassword] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -45,10 +47,10 @@ export default function AdminLogin() {
         </p>
         
         <form onSubmit={handleSubmit} className="text-left">
-          <div className="mb-6">
+          <div className="mb-4">
             <label htmlFor="password" className="sr-only">Password</label>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               id="password"
               className={`w-full px-5 py-4 bg-slate-50/80 border ${error ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 focus:border-sky-500 focus:ring-sky-500/10'} rounded-2xl text-[15px] text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-4 outline-none transition-all disabled:opacity-50`}
               placeholder="Masukkan password admin"
@@ -65,6 +67,19 @@ export default function AdminLogin() {
             )}
           </div>
 
+          <div className="flex items-center gap-2.5 mb-6 px-1">
+            <input
+              type="checkbox"
+              id="showPassword"
+              checked={showPassword}
+              onChange={(e) => setShowPassword(e.target.checked)}
+              className="w-4 h-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500 cursor-pointer accent-sky-500"
+            />
+            <label htmlFor="showPassword" className="text-[13px] font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700 transition-colors">
+              Tampilkan Password
+            </label>
+          </div>
+
           <button 
             type="submit" 
             className="w-full px-6 py-4 rounded-2xl font-bold text-[15px] text-white bg-gradient-to-r from-sky-500 to-sky-600 shadow-md shadow-sky-500/20 hover:shadow-lg hover:shadow-sky-500/30 hover:-translate-y-0.5 active:scale-[0.98] transition-all disabled:opacity-70 disabled:hover:translate-y-0 disabled:active:scale-100 flex justify-center items-center gap-2"
@@ -79,7 +94,7 @@ export default function AdminLogin() {
         </form>
 
         <div className="mt-8 text-[13px] font-medium text-slate-400">
-          Gunakan <code className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-[12px] border border-slate-200">admin</code> untuk demo.
+          Masukkan password yang telah diberikan oleh administrator.
         </div>
       </div>
     </div>

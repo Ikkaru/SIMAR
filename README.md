@@ -1,36 +1,129 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SIMAR — Sistem Informasi dan Booking Ruangan
 
-## Getting Started
+> Sistem manajemen jadwal dan peminjaman ruangan untuk Program Studi Informatika, Fakultas Teknologi Informasi dan Sains Data, Universitas Sebelas Maret (UNS).
 
-First, run the development server:
+## 📋 Fitur
+
+| Fitur | Deskripsi |
+|---|---|
+| **Jadwal Ruangan** | Tabel jadwal mingguan 11 ruangan × 11 sesi berdasarkan data resmi prodi |
+| **Booking Ruangan** | Form peminjaman ruangan kosong dengan validasi sesi, durasi, dan konflik |
+| **Cek Status** | Pencarian booking by ID/NIM untuk cek status (pending/approved/rejected) |
+| **Ruangan Kosong** | View slot tersedia per hari, dikelompokkan berdasarkan ruangan |
+| **Admin Dashboard** | Review & approve/reject booking, statistik, inspeksi slot |
+| **Lock Slot** | Admin mengunci slot tertentu (per sesi) |
+| **Lock Ruangan** | Admin mengunci seluruh ruangan (per hari/minggu/permanen) |
+| **Edit & Delete** | Admin mengedit data booking atau menghapus booking |
+| **Responsive UI** | Mobile-friendly dengan hamburger menu |
+
+## 🛠️ Tech Stack
+
+| Layer | Teknologi |
+|---|---|
+| Framework | Next.js 16 (App Router, Server Actions) |
+| Runtime | React 19, TypeScript 5 |
+| Database | Supabase (PostgreSQL) |
+| Styling | Tailwind CSS 4 |
+| Font | Plus Jakarta Sans |
+| Auth | bcrypt + Session Token + Secure Cookie |
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js >= 18
+- npm >= 9
+- Akun [Supabase](https://supabase.com) (free tier cukup)
+
+### 1. Clone & Install
+
+```bash
+git clone <repo-url>
+cd SIMAR
+npm install
+```
+
+### 2. Setup Supabase
+
+1. Buat project baru di [Supabase Dashboard](https://supabase.com/dashboard)
+2. Buat tabel `bookings`, `locked_slots`, `locked_rooms` (sesuai schema)
+3. Jalankan file `supabase-migration.sql` di SQL Editor Supabase
+4. Catat URL, anon key, dan service role key dari Settings > API
+
+### 3. Setup Environment
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` dan isi:
+- `NEXT_PUBLIC_SUPABASE_URL` — URL project Supabase
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Anon key
+- `SUPABASE_SERVICE_ROLE_KEY` — Service role key
+- `ADMIN_PASSWORD_HASH` — Hash password admin (lihat di bawah)
+
+### 4. Generate Password Hash
+
+```bash
+node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('PASSWORD_ANDA', 12).then(h => console.log(h))"
+```
+
+Copy output hash dan paste ke `ADMIN_PASSWORD_HASH` di `.env.local`.
+
+### 5. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000) di browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🏗️ Struktur Project
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/
+│   ├── page.tsx              # Halaman utama (jadwal ruangan)
+│   ├── layout.tsx            # Root layout
+│   ├── admin/page.tsx        # Dashboard admin
+│   ├── available/page.tsx    # Ruangan kosong
+│   └── status/page.tsx       # Cek status booking
+├── components/
+│   ├── AdminDashboard.tsx    # Dashboard admin component
+│   ├── AdminLogin.tsx        # Form login admin
+│   ├── BookingModal.tsx      # Modal booking ruangan
+│   ├── DaySelector.tsx       # Selector hari
+│   ├── Header.tsx            # Navigation header
+│   └── ScheduleTable.tsx     # Tabel jadwal
+├── lib/
+│   ├── actions.ts            # Server actions (API)
+│   ├── auth-guard.ts         # Admin auth guard
+│   ├── roomLocking.ts        # Lock ruangan logic
+│   ├── scheduleData.ts       # Data jadwal resmi (hardcoded)
+│   ├── store.ts              # CRUD operations (Supabase)
+│   ├── supabase.ts           # Supabase client config
+│   └── types.ts              # Type definitions
+└── middleware.ts             # Route protection middleware
+```
 
-## Learn More
+## 🔒 Security
 
-To learn more about Next.js, take a look at the following resources:
+- Password admin di-hash dengan bcrypt (12 rounds)
+- Session token unik per login (crypto.randomUUID)
+- Cookie: httpOnly, secure, sameSite: strict, maxAge: 8 jam
+- Semua server action admin dilindungi `requireAdmin()` guard
+- Row Level Security (RLS) di Supabase
+- Dual Supabase client: anon (public) dan service role (admin)
+- Middleware untuk proteksi route `/admin`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📦 Deploy (Vercel)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run build
+```
 
-## Deploy on Vercel
+Set environment variables di Vercel Dashboard, lalu deploy.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📄 License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Internal use — Program Studi Informatika, UNS.

@@ -10,7 +10,7 @@ export interface LockedSlot {
 }
 
 function generateId(): string {
-  return `BKG-${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`;
+  return `BKG-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
 }
 
 // ─── Booking CRUD ────────────────────────────────────────────
@@ -18,23 +18,39 @@ function generateId(): string {
 export async function addBooking(
   data: Omit<BookingRequest, 'id' | 'status' | 'createdAt'>
 ): Promise<BookingRequest | null> {
-  const booking = {
-    ...data,
-    id: generateId(),
-    status: 'pending',
-  };
+  const newId = generateId();
 
-  const { data: inserted, error } = await supabase
-    .from('bookings')
-    .insert([booking])
-    .select()
-    .single();
+  const { data: result, error } = await supabase.rpc('submit_booking_atomic', {
+    p_id: newId,
+    p_day: data.day,
+    p_session: data.session,
+    p_room: data.room,
+    p_duration: data.durasiPemakaian,
+    p_nama_pj: data.namaPJ,
+    p_nim: data.nim,
+    p_nama_matakuliah: data.namaMatakuliah,
+    p_dosen_pengampu: data.dosenPengampu
+  });
 
   if (error) {
-    console.error('Error adding booking:', error);
+    console.error('Error adding booking via RPC:', error);
     return null;
   }
-  return inserted as BookingRequest;
+
+  // result is the JSON returned by the RPC
+  if (!result || !result.success) {
+     console.error('RPC failed:', result?.message);
+     return null; 
+  }
+
+  const booking: BookingRequest = {
+    ...data,
+    id: newId,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+
+  return booking;
 }
 
 export async function getAllBookings(): Promise<BookingRequest[]> {
@@ -111,6 +127,14 @@ export async function deleteBooking(id: string): Promise<boolean> {
   return !error;
 }
 
+export async function clearResolvedBookings(): Promise<boolean> {
+  const { error } = await supabase
+    .from('bookings')
+    .delete()
+    .in('status', ['approved', 'rejected']);
+  return !error;
+}
+
 export async function editBooking(
   id: string,
   updates: Partial<Pick<BookingRequest, 'namaPJ' | 'namaMatakuliah' | 'dosenPengampu' | 'durasiPemakaian'>>
@@ -124,6 +148,12 @@ export async function editBooking(
 
   if (error) return null;
   return data as BookingRequest;
+}
+
+export async function deleteAllBookings(): Promise<boolean> {
+  // Use neq to delete all rows. Delete requires a filter.
+  const { error } = await supabase.from('bookings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  return !error;
 }
 
 export async function getBookingStats(): Promise<{
@@ -180,4 +210,26 @@ export async function getRoomUsageStats(): Promise<{ room: RoomName; bookedCount
     bookedCount: data.filter((b) => b.room === room).length,
     approvedCount: data.filter((b) => b.room === room && b.status === 'approved').length,
   })).sort((a, b) => b.approvedCount - a.approvedCount);
+}
+
+// ─── Privacy-safe Search ─────────────────────────────────────
+
+export async function searchBookingsByNimOrId(
+  query: string
+): Promise<BookingRequest[]> {
+  // Search by exact booking ID or NIM match concurrently
+  const [
+    { data: byId },
+    { data: byNim }
+  ] = await Promise.all([
+    supabase.from('bookings').select('*').ilike('id', `%${query}%`).order('createdAt', { ascending: false }).limit(20),
+    supabase.from('bookings').select('*').ilike('nim', `%${query}%`).order('createdAt', { ascending: false }).limit(20)
+  ]);
+
+  // Merge and deduplicate
+  const merged = new Map<string, BookingRequest>();
+  for (const item of [...(byId || []), ...(byNim || [])]) {
+    merged.set(item.id, item as BookingRequest);
+  }
+  return Array.from(merged.values());
 }

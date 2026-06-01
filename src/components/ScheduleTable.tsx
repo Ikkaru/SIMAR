@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Day, SessionNumber, RoomName, ROOM_LIST, ScheduleSlot, BookingRequest, getSessionTimes, isDayPast, getWeekDates
 } from '@/lib/types';
-import { getScheduleForDay } from '@/lib/scheduleData';
 import { fetchDayOverrides, fetchLockedRoomsForDate } from '@/lib/actions';
 import { LockedRoom } from '@/lib/roomLocking';
 
@@ -31,15 +30,9 @@ export default function ScheduleTable({
   const [isPast, setIsPast] = useState(false);
 
   const sessionTimes = getSessionTimes(selectedDay);
-  const baseSlots = getScheduleForDay(selectedDay);
   
   const dates = useMemo(() => getWeekDates(), []);
   const currentDateStr = dates[selectedDay]?.dateObj.toISOString().split('T')[0];
-
-  const baseSlotMap = new Map<string, ScheduleSlot>();
-  baseSlots.forEach((slot) => {
-    baseSlotMap.set(`${slot.day}-${slot.session}-${slot.room}`, slot);
-  });
 
   const fetchOverridesAndLocks = useCallback(async () => {
     if (!currentDateStr) return;
@@ -68,10 +61,6 @@ export default function ScheduleTable({
   function getSlotDisplay(session: SessionNumber, room: RoomName): SlotDisplayData {
     const key = `${selectedDay}-${session}-${room}`;
     if (slotOverrides[key]) return slotOverrides[key];
-    const baseSlot = baseSlotMap.get(key);
-    if (baseSlot) {
-      return { status: baseSlot.status as SlotDisplayData['status'], courseName: baseSlot.courseName };
-    }
     return { status: 'available', courseName: '' };
   }
 
