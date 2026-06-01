@@ -532,12 +532,24 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
       });
     }
 
-    if (toInsert.length > 0) {
+    const uniqueSchedules = new Map<string, any>();
+    for (const item of toInsert) {
+      const key = `${item.day}-${item.session}-${item.room}`;
+      if (uniqueSchedules.has(key)) {
+        const existing = uniqueSchedules.get(key);
+        existing.courseName += ` & ${item.courseName}`;
+      } else {
+        uniqueSchedules.set(key, { ...item });
+      }
+    }
+    const deduplicatedToInsert = Array.from(uniqueSchedules.values());
+
+    if (deduplicatedToInsert.length > 0) {
       await prisma.$transaction([
         prisma.officialSchedule.deleteMany({}),
-        prisma.officialSchedule.createMany({ data: toInsert })
+        prisma.officialSchedule.createMany({ data: deduplicatedToInsert })
       ]);
-      totalSynced = toInsert.length;
+      totalSynced = deduplicatedToInsert.length;
     }
 
     revalidatePath('/');
