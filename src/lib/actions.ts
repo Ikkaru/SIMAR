@@ -532,15 +532,14 @@ export async function syncSIGenerate(tahunAjar: string = '2024', idSemester: str
       });
     }
 
+    // Deduplicate: if same slot appears twice (rare edge case), keep the last one
     const uniqueSchedules = new Map<string, any>();
     for (const item of toInsert) {
       const key = `${item.day}-${item.session}-${item.room}`;
       if (uniqueSchedules.has(key)) {
-        const existing = uniqueSchedules.get(key);
-        existing.courseName += ` & ${item.courseName}`;
-      } else {
-        uniqueSchedules.set(key, { ...item });
+        console.warn(`Duplicate schedule slot detected: ${key} — overwriting with latest entry`);
       }
+      uniqueSchedules.set(key, { ...item });
     }
     const deduplicatedToInsert = Array.from(uniqueSchedules.values());
 
