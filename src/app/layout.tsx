@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   title: 'SIMAR — Sistem Informasi dan Booking Ruangan | Prodi Informatika UNS',
   description:
     'Sistem Informasi dan Booking Ruangan (SIMAR) Program Studi Informatika, Fakultas Teknologi Informasi dan Sains Data, Universitas Sebelas Maret.',
+  icons: {
+    icon: '/favicon.png',
+  },
 };
 
 export default function RootLayout({
