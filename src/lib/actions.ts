@@ -37,6 +37,14 @@ const BAN_PREFIX = "banned_ip:";
 const FAILED_ATTEMPT_PREFIX = "failed_attempts:";
 
 async function checkRateLimit(): Promise<ActionResult<any> | null> {
+  // Pengecualian untuk Admin: Bebas dari rate limit
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get('admin_session')?.value;
+  if (sessionToken) {
+    const session = await prisma.adminSession.findUnique({ where: { token: sessionToken } });
+    if (session && session.expiresAt > new Date()) return null;
+  }
+
   if (!redis || !ratelimit) return null;
   const headerList = await headers();
   const ip = headerList.get('x-forwarded-for')?.split(',')[0]?.trim() || headerList.get('x-real-ip') || "127.0.0.1";
@@ -418,9 +426,6 @@ function getCooldownMinutes(attempts: number): number {
 
 export async function loginAdmin(password: string): Promise<ActionResult> {
   try {
-    const rlCheck = await checkRateLimit();
-    if (rlCheck) return rlCheck;
-
     // 1. Deteksi IP address
     const headerList = await headers();
     const ip = headerList.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';
