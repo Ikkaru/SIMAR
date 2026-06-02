@@ -1,94 +1,149 @@
-# SIMAR — Sistem Informasi Manajemen dan Booking Ruangan
+<div align="center">
+  <h1 align="center">SIMAR</h1>
+  <p align="center">
+    <strong>Sistem Informasi Manajemen dan Booking Ruangan Berbasis Web</strong>
+  </p>
+  <p align="center">
+    Platform terpadu untuk mendigitalisasi proses akademik, meminimalisasi bentrok jadwal, serta menyederhanakan administrasi operasional program studi di lingkungan perguruan tinggi.
+  </p>
+  
+  <p align="center">
+    <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js" alt="Next.js" /></a>
+    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript" alt="TypeScript" /></a>
+    <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat-square&logo=postgresql" alt="PostgreSQL" /></a>
+    <a href="https://www.prisma.io/"><img src="https://img.shields.io/badge/Prisma-ORM-2D3748?style=flat-square&logo=prisma" alt="Prisma" /></a>
+    <a href="https://tailwindcss.com/"><img src="https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?style=flat-square&logo=tailwind-css" alt="Tailwind CSS" /></a>
+    <a href="https://upstash.com/"><img src="https://img.shields.io/badge/Upstash-Redis-FF2E54?style=flat-square&logo=redis" alt="Upstash" /></a>
+  </p>
+</div>
 
-SIMAR adalah sistem manajemen jadwal dan peminjaman ruangan perkuliahan terpadu yang dirancang untuk mendigitalisasi proses akademik, meminimalisasi bentrok jadwal, serta mempermudah administrasi operasional program studi.
+---
 
-## Arsitektur & Teknologi
+## 📖 Daftar Isi
+- [Arsitektur & Teknologi](#-arsitektur--teknologi)
+- [Fitur Utama](#-fitur-utama)
+- [Keamanan & Proteksi](#-keamanan--proteksi)
+- [Panduan Instalasi (Lokal)](#-panduan-instalasi-lokal)
+- [Deployment (Production)](#-deployment-production)
+- [Panduan Pengembangan (Developer Guide)](#-panduan-pengembangan-developer-guide)
 
-Sistem ini dibangun menggunakan arsitektur modern untuk menjamin performa dan fleksibilitas *deployment*:
+---
 
-- **Framework**: Next.js 15 (App Router)
-- **Bahasa Pemrograman**: TypeScript 5
-- **Database**: PostgreSQL (direkomendasikan via Neon Database)
-- **ORM**: Prisma
-- **UI/UX**: Tailwind CSS v4
-- **Keamanan**: Autentikasi sesi kustom, enkripsi `bcrypt`, dan proteksi *Brute-Force*
-- **Otomatisasi**: Vercel Cron Jobs untuk pemeliharaan rutin mingguan
+## 🏗 Arsitektur & Teknologi
 
-## Fungsionalitas Utama
+Sistem ini direkayasa menggunakan *tech stack* modern untuk menjamin latensi rendah, skalabilitas tinggi, dan keamanan di tingkat *enterprise*:
 
-### 1. Portal Publik (Mahasiswa & Civitas Akademika)
-Fokus pada transparansi dan kemudahan akses informasi ketersediaan ruangan:
-- **Papan Jadwal Interaktif**: Matriks jadwal ruangan dan sesi waktu standar yang menyesuaikan otomatis dengan hari aktif.
-- **Pengajuan Peminjaman**: Formulir peminjaman mandiri pada slot yang berstatus tersedia.
-- **Ketersediaan Ruangan**: Algoritma pencarian cepat untuk memetakan ruangan kosong di seluruh kampus.
-- **Pelacakan Status**: Pemantauan status persetujuan peminjaman secara *real-time* berbasis ID Booking atau NIM.
+- **Core Framework**: Next.js 15 (React 19, App Router, Server Actions)
+- **Language**: TypeScript (Strict Mode)
+- **Database Layer**: PostgreSQL diakses secara optimal melalui Prisma ORM
+- **Styling Engine**: Tailwind CSS v4 untuk antarmuka yang responsif dan modern
+- **Rate Limiting & In-Memory Store**: Upstash Redis (Serverless Edge-compatible)
+- **Automation**: *Web Scraping* terintegrasi (Cheerio/Puppeteer) dan Vercel Cron Jobs
 
-### 2. Portal Administrator
-Pusat kendali komprehensif dengan sistem keamanan ketat bagi staf administrasi:
-- **Dashboard Statistik**: Metrik utilisasi ruangan dan status pengajuan secara agregat.
-- **Manajemen Peminjaman**: Alur kerja persetujuan (Setujui, Tolak dengan catatan, atau Edit data).
-- **Manajemen Jadwal Resmi**: *CRUD operations* jadwal tetap dan integrasi sinkronisasi otomatis ke sistem informasi kampus (SIGenerate).
-- **Sistem Kunci (Locking System)**: Penutupan peminjaman untuk sesi spesifik maupun penguncian ruangan secara penuh.
-- **Manajemen Pengumuman**: Sistem pengelolaan spanduk informasi global.
-- **Otomatisasi Sistem**: *Cleanup* otomatis untuk mereset riwayat peminjaman setiap akhir pekan.
+---
 
-## Panduan Instalasi & Deployment
+## ✨ Fitur Utama
 
-SIMAR mendukung eksekusi di lingkungan *Serverless* (Vercel) maupun lingkungan terisolasi berbasis Docker.
+SIMAR membagi ekosistem aplikasinya menjadi dua portal utama yang saling terintegrasi secara *real-time*:
 
-### Prasyarat
-- Node.js versi 18+ (Untuk lingkungan Non-Docker)
-- PostgreSQL
+### 🎓 Portal Civitas Akademika (Publik)
+Fokus pada transparansi dan aksesibilitas *self-service* bagi mahasiswa dan dosen:
+- **Papan Jadwal Interaktif**: Visualisasi matriks jadwal ruangan dan sesi waktu yang menyesuaikan secara cerdas dengan kalender hari aktif.
+- **Sistem Pengajuan Mandiri**: Mekanisme formulir peminjaman pada slot yang diverifikasi berstatus tersedia (*Available*).
+- **Pemetaan Ketersediaan**: Algoritma pencarian efisien untuk memindai ruangan kosong di seluruh area kampus secara instan.
+- **Pelacakan Status (*Real-Time*)**: Kemampuan memantau status pengajuan (Menunggu, Disetujui, Ditolak) berbasis ID Booking atau parameter NIM.
 
-### Instalasi Lokal
-```bash
-git clone https://github.com/Ikkaru/SIMAR.git
-cd SIMAR
-npm install
-cp .env.example .env.local
-```
-Sesuaikan parameter krusial di `.env.local`:
-- `DATABASE_URL`: URI koneksi PostgreSQL.
-- `ADMIN_PASSWORD_HASH`: Hash bcrypt untuk kata sandi administrator awal.
-- `CRON_SECRET`: Kunci otorisasi untuk eksekusi API *cron job*.
+### 🛡 Portal Administrator
+Dasbor kontrol berkeamanan tinggi untuk staf akademik dan manajemen fasilitas:
+- **Statistik & Analitik**: Metrik utilisasi ruangan dan agregat status pengajuan peminjaman.
+- **Alur Persetujuan Terpusat**: Manajemen siklus hidup pengajuan (Setujui, Tolak dengan catatan, modifikasi administratif).
+- **Manajemen Jadwal Resmi (*Data Sync*)**: Integrasi otomatis yang mampu menyinkronkan jadwal kuliah dari sistem universitas (SIGenerate) ke database lokal.
+- **Sistem Kunci Ruangan (Locking Mechanism)**: Kapabilitas untuk mengunci (*lockdown*) ruangan pada sesi spesifik atau pemblokiran ruangan secara penuh untuk keperluan pemeliharaan.
+- **Pusat Informasi**: Pengelolaan pengumuman publik atau *banner* darurat secara dinamis.
 
-### Sinkronisasi Skema Database (Non-Docker)
-```bash
-npx prisma generate
-npx prisma db push
-```
+---
 
-### Opsi Deployment 1: Vercel (Direkomendasikan)
-Vercel adalah platform ideal untuk Next.js dan secara bawaan mendukung eksekusi tugas berkala (*cron job*).
-1. Impor repositori GitHub ke Vercel.
-2. Atur variabel *environment* (`DATABASE_URL`, `ADMIN_PASSWORD_HASH`, `CRON_SECRET`).
-3. Deploy aplikasi. *Vercel Cron* (`vercel.json`) akan otomatis menangani pemeliharaan mingguan (reset jadwal) setiap hari Sabtu pukul 01:00 WIB.
+## 🔒 Keamanan & Proteksi
 
-### Opsi Deployment 2: Docker Compose (VPS Lokal / Mandiri)
-Sistem ini dilengkapi dengan konfigurasi Docker untuk *deployment* terisolasi. Skrip sinkronisasi database dijalankan otomatis saat kontainer dihidupkan.
-1. Pastikan Anda telah mengatur variabel *environment* pada file `.env.local`.
-2. Jalankan perintah berikut:
-```bash
-docker-compose up -d --build
-```
+Sistem ini didesain dengan pertahanan proaktif terhadap potensi serangan siber:
+- **Autentikasi Terenkripsi**: Pengelolaan sesi kustom berbasis *HTTP-Only Cookies* dipadukan dengan enkripsi kata sandi `bcryptjs`.
+- **Anti-Spam & Rate Limiting (Ditenagai Upstash)**: *Middleware* memblokir intrusi *bot* pada *layer Edge*. Menerapkan batas wajar (3 *request* / 30 menit) dengan **Sistem Banned** otomatis (blokir IP selama 10 jam) bagi *spammer* yang persisten.
+- **Brute-Force Protection**: Melindungi *endpoint* login administrator dengan skema *cooldown* eksponensial.
 
-**Pengaturan Auto Cron di Lingkungan Docker:**
-Mesin Docker tidak memiliki eksekutor *cron* otomatis seperti Vercel. Anda wajib mengatur penjadwalan secara manual pada *host server* (Linux VPS) menggunakan *crontab* agar riwayat peminjaman dibersihkan setiap minggu.
+---
 
-Buka konfigurasi cron pada server Anda:
-```bash
-crontab -e
-```
-Tambahkan baris berikut agar server memanggil *endpoint* *cleanup* setiap Sabtu pukul 01:00 pagi:
-```bash
-0 1 * * 6 curl -X GET -H "Authorization: Bearer <ISI_CRON_SECRET_ANDA>" http://localhost:3000/api/cron/reset-weekly
-```
-*(Catatan: Sesuaikan `http://localhost:3000` dengan domain/IP aplikasi Anda, dan ganti `<ISI_CRON_SECRET_ANDA>` dengan nilai `CRON_SECRET`).*
+## 🚀 Panduan Instalasi (Lokal)
 
-## Panduan Pengembangan (Developer Guide)
+Ikuti langkah-langkah berikut untuk menjalankan SIMAR di lingkungan pengembangan (Node.js versi 18+ direkomendasikan):
 
-Panduan teknis bagi insinyur perangkat lunak untuk mengelola atau menambah fitur:
-- **Perubahan Database**: Model dikelola dalam `prisma/schema.prisma`. Gunakan `npx prisma db push` untuk merefleksikan perubahan.
-- **Logika Backend**: Akses database sederhana dilakukan melalui `src/lib/store.ts`. Operasi mutasi data yang kompleks wajib ditempatkan dalam *Server Actions* (`src/lib/actions.ts`).
-- **Antarmuka (UI)**: Komponen React tersentralisasi di `src/components/`. 
-- **Routing**: Semua konfigurasi halaman berbasis Next.js App Router yang terletak pada `src/app/`.
+1. **Kloning Repositori**
+   ```bash
+   git clone https://github.com/Ikkaru/SIMAR.git
+   cd SIMAR
+   ```
+
+2. **Instalasi Dependensi**
+   ```bash
+   npm install
+   ```
+
+3. **Konfigurasi Environment**
+   Gandakan file konfigurasi dan isi parameter rahasianya:
+   ```bash
+   cp .env.example .env.local
+   ```
+   **Parameter Krusial di `.env.local`:**
+   - `DATABASE_URL`: URI koneksi PostgreSQL yang valid.
+   - `ADMIN_PASSWORD_HASH`: Nilai hash *bcrypt* untuk menginisiasi kredensial admin pertama kali.
+   - `CRON_SECRET`: Kunci enkripsi untuk validasi API tugas otomatis.
+   - `UPSTASH_REDIS_REST_URL` & `UPSTASH_REDIS_REST_TOKEN`: Kredensial *Serverless Redis* (Wajib untuk fitur *Rate Limit*).
+
+4. **Inisialisasi Database**
+   Sinkronkan skema ORM ke PostgreSQL lokal Anda:
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
+
+5. **Jalankan Development Server**
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 🌍 Deployment (Production)
+
+SIMAR sangat fleksibel untuk di-*deploy* di lingkungan komputasi modern.
+
+### Opsi A: Serverless via Vercel (Rekomendasi Utama)
+Vercel adalah *environment* *first-class* untuk aplikasi Next.js.
+1. Impor repositori GitHub ke dashboard Vercel.
+2. Injeksi semua *environment variables* yang dibutuhkan.
+3. Proses otomatisasi Vercel Cron Jobs (didefinisikan dalam `vercel.json`) akan berjalan secara *native*—mereset riwayat peminjaman setiap Sabtu (01:00 pagi).
+
+### Opsi B: Kontainerisasi via Docker Compose (VPS Lokal / Mandiri)
+Sistem dilengkapi konfigurasi *Infrastructure-as-Code* bawaan untuk lingkungan terisolasi.
+1. Pastikan seluruh variabel telah didefinisikan pada `.env.local`.
+2. Eksekusi kontainer:
+   ```bash
+   docker-compose up -d --build
+   ```
+> [!WARNING]
+> **Penting untuk pengguna Docker:** Mesin Docker standar tidak mengeksekusi Vercel Cron Jobs. Anda **wajib** mengatur *cron scheduler* (Linux Crontab) di VPS Anda untuk menembak endpoint `http://<domain_anda>/api/cron/reset-weekly` menggunakan header rahasia (`Authorization: Bearer CRON_SECRET`) setiap minggunya.
+
+---
+
+## 🛠 Panduan Pengembangan (Developer Guide)
+
+Panduan teknis bagi kolaborator dan kontributor sumber terbuka:
+
+- **Lapisan Basis Data (`prisma/schema.prisma`)**: Seluruh modifikasi entitas wajib dilakukan melalui skema Prisma, diikuti dengan `npx prisma db push`.
+- **Lapisan Logika Bisnis (`src/lib/actions.ts`)**: Aplikasi ini menggunakan pendekatan fungsi *Server Actions* Next.js yang aman untuk mutasi data (*booking, review, login*). Operasi baca (I/O murni) dienkapsulasi dalam `src/lib/store.ts`.
+- **Lapisan Antarmuka (`src/components/`)**: Terdiri dari komponen React modular dan responsif. Modifikasi estetika mengikuti standar *utility classes* Tailwind CSS v4.
+- **Lapisan Middleware (`src/proxy.ts`)**: Pusat intersep *traffic*. Menangani mitigasi serangan (*Rate Limit*) menggunakan API Upstash, serta mengevaluasi validitas token sesi administratif secara presisi.
+
+<br/>
+<div align="center">
+  <sub>Dibangun dengan dedikasi untuk mendukung ekosistem akademik yang lebih baik.</sub>
+</div>
