@@ -58,9 +58,32 @@ npx prisma generate
 npx prisma db push
 ```
 
-### Opsi Deployment
-- **Vercel (Direkomendasikan)**: Impor repositori ke Vercel dan atur variabel *environment*. Eksekusi tugas berkala (*cron job*) mingguan diatur secara otomatis melalui `vercel.json`.
-- **Docker Compose**: Jalankan `docker-compose up -d --build`. Skrip sinkronisasi database dijalankan otomatis saat kontainer dihidupkan. Fitur *cron job* perlu dipanggil menggunakan eksekutor terpisah seperti *Linux cron* dengan header otorisasi yang sesuai.
+### Opsi Deployment 1: Vercel (Direkomendasikan)
+Vercel adalah platform ideal untuk Next.js dan secara bawaan mendukung eksekusi tugas berkala (*cron job*).
+1. Impor repositori GitHub ke Vercel.
+2. Atur variabel *environment* (`DATABASE_URL`, `ADMIN_PASSWORD_HASH`, `CRON_SECRET`).
+3. Deploy aplikasi. *Vercel Cron* (`vercel.json`) akan otomatis menangani pemeliharaan mingguan (reset jadwal) setiap hari Sabtu pukul 01:00 WIB.
+
+### Opsi Deployment 2: Docker Compose (VPS Lokal / Mandiri)
+Sistem ini dilengkapi dengan konfigurasi Docker untuk *deployment* terisolasi. Skrip sinkronisasi database dijalankan otomatis saat kontainer dihidupkan.
+1. Pastikan Anda telah mengatur variabel *environment* pada file `.env.local`.
+2. Jalankan perintah berikut:
+```bash
+docker-compose up -d --build
+```
+
+**Pengaturan Auto Cron di Lingkungan Docker:**
+Mesin Docker tidak memiliki eksekutor *cron* otomatis seperti Vercel. Anda wajib mengatur penjadwalan secara manual pada *host server* (Linux VPS) menggunakan *crontab* agar riwayat peminjaman dibersihkan setiap minggu.
+
+Buka konfigurasi cron pada server Anda:
+```bash
+crontab -e
+```
+Tambahkan baris berikut agar server memanggil *endpoint* *cleanup* setiap Sabtu pukul 01:00 pagi:
+```bash
+0 1 * * 6 curl -X GET -H "Authorization: Bearer <ISI_CRON_SECRET_ANDA>" http://localhost:3000/api/cron/reset-weekly
+```
+*(Catatan: Sesuaikan `http://localhost:3000` dengan domain/IP aplikasi Anda, dan ganti `<ISI_CRON_SECRET_ANDA>` dengan nilai `CRON_SECRET`).*
 
 ## Panduan Pengembangan (Developer Guide)
 
