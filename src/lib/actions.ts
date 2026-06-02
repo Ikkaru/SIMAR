@@ -12,7 +12,7 @@ import {
   getBookingsForSlot, isSlotLocked, lockSlot, unlockSlot,
   deleteBooking, editBooking, getBookingById, getRoomUsageStats, deleteAllBookings,
 } from './store';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { prisma } from './prisma';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
@@ -354,27 +354,66 @@ export async function fetchRoomStats(): Promise<
 
 // ─── Auth ────────────────────────────────────────────────────
 
+// Cooldown progresif: setiap kelipatan 3 kali gagal, durasi blokir meningkat
+const COOLDOWN_MINUTES = [1, 2, 5, 15]; // index 0 = gagal 3x, index 1 = gagal 6x, dst.
+const MAX_ATTEMPTS_PER_TIER = 3;
+
+function getCooldownMinutes(attempts: number): number {
+  const tierIndex = Math.floor((attempts - 1) / MAX_ATTEMPTS_PER_TIER);
+  return COOLDOWN_MINUTES[Math.min(tierIndex, COOLDOWN_MINUTES.length - 1)];
+}
+
 export async function loginAdmin(password: string): Promise<ActionResult> {
   try {
-    const hash = process.env.ADMIN_PASSWORD_HASH || '';
-    const cleanHash = hash.replace(/\\/g, ''); // Fix double escaping if necessary
-    
-    const match = await bcrypt.compare(password, cleanHash);
+    // 1. Deteksi IP address
+    const headerList = await headers();
+    const ip = headerList.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';
+
+    // 2. Cek apakah IP sedang diblokir (pre-flight, sebelum bcrypt)
+    const attempt = await prisma.loginAttempt.findUnique({ where: { ip } });
+    if (attempt?.blockedUntil && attempt.blockedUntil > new Date()) {
+      const remainingSec = Math.ceil((attempt.blockedUntil.getTime() - Date.now()) / 1000);
+      const remainingMin = Math.ceil(remainingSec / 60);
+      return {
+        success: false,
+        message: `Terlalu banyak percobaan login. Coba lagi dalam ${remainingMin} menit.`
+      };
+    }
+
+    // 3. Auto-seed: jika tabel Admin kosong, buat admin pertama dari env
+    const adminCount = await prisma.admin.count();
+    if (adminCount === 0) {
+      const envHash = process.env.ADMIN_PASSWORD_HASH || '';
+      const cleanHash = envHash.replace(/\\/g, '');
+      if (cleanHash) {
+        await prisma.admin.create({
+          data: { username: 'admin', password: cleanHash }
+        });
+      }
+    }
+
+    // 4. Ambil data admin dari database
+    const admin = await prisma.admin.findUnique({ where: { username: 'admin' } });
+    if (!admin) {
+      return { success: false, message: 'Akun admin belum dikonfigurasi.' };
+    }
+
+    // 5. Verifikasi password
+    const match = await bcrypt.compare(password, admin.password);
+
     if (match) {
+      // Login berhasil: hapus catatan percobaan gagal
+      await prisma.loginAttempt.delete({ where: { ip } }).catch(() => {});
+
       const token = crypto.randomUUID();
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
-      
-      await prisma.adminSession.create({
-        data: {
-          token,
-          expiresAt
-        }
-      });
-      
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      await prisma.adminSession.create({ data: { token, expiresAt } });
+
       const cookieStore = await cookies();
-      cookieStore.set('admin_session', token, { 
-        httpOnly: true, 
+      cookieStore.set('admin_session', token, {
+        httpOnly: true,
         path: '/',
         expires: expiresAt,
         sameSite: 'lax',
@@ -382,7 +421,39 @@ export async function loginAdmin(password: string): Promise<ActionResult> {
       });
       return { success: true, message: 'Login berhasil' };
     }
-    return { success: false, message: 'Password salah' };
+
+    // 6. Password salah: update counter percobaan gagal
+    const currentAttempts = (attempt?.attempts ?? 0) + 1;
+    let blockedUntil: Date | null = null;
+
+    // Terapkan cooldown setiap kelipatan 3
+    if (currentAttempts % MAX_ATTEMPTS_PER_TIER === 0) {
+      const cooldown = getCooldownMinutes(currentAttempts);
+      blockedUntil = new Date(Date.now() + cooldown * 60 * 1000);
+    }
+
+    await prisma.loginAttempt.upsert({
+      where: { ip },
+      create: { ip, attempts: currentAttempts, blockedUntil },
+      update: { attempts: currentAttempts, blockedUntil }
+    });
+
+    // Hitung sisa percobaan sebelum cooldown berikutnya
+    const attemptsUntilBlock = MAX_ATTEMPTS_PER_TIER - (currentAttempts % MAX_ATTEMPTS_PER_TIER);
+    const nextCooldown = getCooldownMinutes(currentAttempts + attemptsUntilBlock);
+
+    if (blockedUntil) {
+      const cooldownMin = getCooldownMinutes(currentAttempts);
+      return {
+        success: false,
+        message: `Password salah. Akun diblokir selama ${cooldownMin} menit karena terlalu banyak percobaan.`
+      };
+    }
+
+    return {
+      success: false,
+      message: `Password salah. Sisa ${attemptsUntilBlock} percobaan sebelum diblokir ${nextCooldown} menit.`
+    };
   } catch (error) {
     console.error('Login error:', error);
     return { success: false, message: 'Terjadi kesalahan sistem saat login' };
@@ -406,6 +477,45 @@ export async function logoutAdmin(): Promise<ActionResult> {
 }
 
 // verifyAdmin dan requireAdmin sekarang diekspor dari auth-guard.ts di bagian atas file.
+
+export async function changeAdminPassword(
+  oldPassword: string,
+  newPassword: string
+): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, message: 'Password baru minimal 6 karakter.' };
+    }
+
+    const admin = await prisma.admin.findUnique({ where: { username: 'admin' } });
+    if (!admin) {
+      return { success: false, message: 'Akun admin tidak ditemukan.' };
+    }
+
+    const match = await bcrypt.compare(oldPassword, admin.password);
+    if (!match) {
+      return { success: false, message: 'Password lama salah.' };
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await prisma.admin.update({
+      where: { username: 'admin' },
+      data: { password: newHash }
+    });
+
+    return { success: true, message: 'Password berhasil diubah.' };
+  } catch (error: any) {
+    console.error('changeAdminPassword error:', error);
+    return {
+      success: false,
+      message: error.message === 'Unauthorized: Admin authentication required.'
+        ? error.message
+        : 'Gagal mengubah password.'
+    };
+  }
+}
 
 export async function resetWeeklyBookings(): Promise<ActionResult> {
   try {

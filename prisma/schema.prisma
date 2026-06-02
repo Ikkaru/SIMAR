@@ -78,3 +78,20 @@ model AdminSession {
 
   @@map("admin_sessions")
 }
+
+model Admin {
+  id       String @id @default(uuid())
+  username String @unique
+  password String
+
+  @@map("admins")
+}
+
+model LoginAttempt {
+  ip           String    @id
+  attempts     Int       @default(0)
+  blockedUntil DateTime? @map("blocked_until")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("login_attempts")
+}

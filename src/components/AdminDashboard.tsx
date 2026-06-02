@@ -7,7 +7,7 @@ import {
   toggleSlotLock, removeBooking, updateBooking, fetchRoomStats,
   addOfficialSchedule, editOfficialSchedule, deleteOfficialSchedule,
   createAnnouncement, deleteAnnouncement, toggleAnnouncementActive, fetchAllAnnouncements,
-  Announcement, AnnouncementType
+  Announcement, AnnouncementType, changeAdminPassword
 } from '@/lib/actions';
 import DaySelector from './DaySelector';
 import ScheduleTable, { SlotDisplayData } from './ScheduleTable';
@@ -224,6 +224,13 @@ export default function AdminDashboard() {
   const [syncTahun, setSyncTahun] = useState('2024');
   const [syncSemester, setSyncSemester] = useState('1');
 
+  // Change Password Modal State
+  const [changePwModalOpen, setChangePwModalOpen] = useState(false);
+  const [pwOld, setPwOld] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+
   const handleRoomHeaderClick = (room: RoomName, isLocked: boolean, currentNote: string) => {
     setSelectedRoomToLock(room);
     setIsCurrentlyLocked(isLocked);
@@ -356,6 +363,10 @@ export default function AdminDashboard() {
           </button>
           <button onClick={handleClearHistory} className="px-5 py-2.5 rounded-xl font-bold text-[14px] text-white bg-rose-600 border border-rose-700 hover:bg-rose-700 hover:shadow-lg hover:shadow-rose-600/20 transition-all outline-none focus:ring-2 focus:ring-rose-300">
             Reset Mingguan
+          </button>
+          <button onClick={() => setChangePwModalOpen(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-[14px] text-slate-700 bg-slate-100 border border-slate-200 hover:bg-slate-200 hover:border-slate-300 transition-all outline-none focus:ring-2 focus:ring-slate-300">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Ganti Password
           </button>
           <button onClick={handleLogout} className="px-5 py-2.5 rounded-xl font-bold text-[14px] text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 hover:text-rose-700 transition-all outline-none focus:ring-2 focus:ring-rose-200">
             Keluar
@@ -1069,6 +1080,89 @@ export default function AdminDashboard() {
                 </button>
                 <button className="flex-1 px-4 py-3 rounded-xl font-bold text-[14px] text-white bg-sky-600 hover:bg-sky-700 transition-colors shadow-md shadow-sky-600/20 disabled:opacity-50" onClick={executeSync} disabled={isLoading}>
                   {isLoading ? 'Menyinkronkan...' : 'Mulai Sinkronisasi'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Change Password Modal */}
+      {changePwModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[2000] flex items-center justify-center p-4 animate-[fadeIn_200ms_ease-out]" onClick={() => setChangePwModalOpen(false)}>
+          <div className="bg-white rounded-[24px] shadow-2xl shadow-slate-900/10 w-full max-w-[460px] flex flex-col animate-[slideUp_300ms_ease-out] relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-violet-500 via-purple-500 to-violet-500" />
+            
+            <div className="flex items-start justify-between px-8 pt-8 pb-5 border-b border-slate-100">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-[22px] font-extrabold text-slate-800 tracking-tight">Ganti Password</h2>
+                <span className="text-[13px] text-slate-500 font-medium">Perbarui password akun admin.</span>
+              </div>
+              <button className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-rose-100 hover:text-rose-600 transition-colors shrink-0 outline-none focus:ring-2 focus:ring-rose-200" onClick={() => setChangePwModalOpen(false)}>✕</button>
+            </div>
+            
+            <div className="p-8 flex flex-col gap-5">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">Password Lama</label>
+                <input
+                  type="password"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[14px] focus:bg-white focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none transition-all"
+                  placeholder="Masukkan password lama"
+                  value={pwOld}
+                  onChange={(e) => setPwOld(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">Password Baru</label>
+                <input
+                  type="password"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[14px] focus:bg-white focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 outline-none transition-all"
+                  placeholder="Minimal 6 karakter"
+                  value={pwNew}
+                  onChange={(e) => setPwNew(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">Konfirmasi Password Baru</label>
+                <input
+                  type="password"
+                  className={`w-full px-4 py-3 bg-slate-50 border rounded-xl text-[14px] focus:bg-white focus:ring-4 outline-none transition-all ${
+                    pwConfirm && pwNew !== pwConfirm
+                      ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10'
+                      : 'border-slate-200 focus:border-violet-500 focus:ring-violet-500/10'
+                  }`}
+                  placeholder="Ulangi password baru"
+                  value={pwConfirm}
+                  onChange={(e) => setPwConfirm(e.target.value)}
+                />
+                {pwConfirm && pwNew !== pwConfirm && (
+                  <p className="mt-1.5 text-[12px] font-semibold text-rose-600">Password baru tidak cocok.</p>
+                )}
+              </div>
+              
+              <div className="flex gap-3 mt-2">
+                <button
+                  className="flex-1 px-4 py-3 rounded-xl font-bold text-[14px] text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  onClick={() => { setChangePwModalOpen(false); setPwOld(''); setPwNew(''); setPwConfirm(''); }}
+                >
+                  Batal
+                </button>
+                <button
+                  className="flex-1 px-4 py-3 rounded-xl font-bold text-[14px] text-white bg-violet-600 hover:bg-violet-700 transition-colors shadow-md shadow-violet-600/20 disabled:opacity-50"
+                  disabled={pwLoading || !pwOld || !pwNew || pwNew.length < 6 || pwNew !== pwConfirm}
+                  onClick={async () => {
+                    setPwLoading(true);
+                    const res = await changeAdminPassword(pwOld, pwNew);
+                    setPwLoading(false);
+                    if (res.success) {
+                      showToast(res.message, 'success');
+                      setChangePwModalOpen(false);
+                      setPwOld(''); setPwNew(''); setPwConfirm('');
+                    } else {
+                      showToast(res.message, 'error');
+                    }
+                  }}
+                >
+                  {pwLoading ? 'Menyimpan...' : 'Simpan Password Baru'}
                 </button>
               </div>
             </div>
