@@ -37,6 +37,15 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# Copy package.json untuk menginstal prisma CLI secara lokal (agar ukuran image tetap terjaga)
+COPY package.json ./
+RUN npm install prisma --no-save
+
+# Copy skema database untuk keperluan sinkronisasi
+COPY prisma ./prisma
+# Pastikan user nextjs memiliki hak akses ke folder prisma
+RUN chown -R nextjs:nodejs ./prisma
+
 COPY --from=builder /app/public ./public
 
 # Set the correct permission for prerender cache
@@ -56,4 +65,6 @@ ENV PORT 3000
 # set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["node", "server.js"]
+# [AUTO-MIGRATE] Jalankan sinkronisasi database lalu mulai server.
+# --skip-generate digunakan agar tidak terjadi error permission saat mencoba membuat ulang Prisma Client.
+CMD npx prisma db push --skip-generate && node server.js

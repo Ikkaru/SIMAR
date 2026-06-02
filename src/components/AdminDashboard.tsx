@@ -38,6 +38,11 @@ export default function AdminDashboard() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ namaPJ: '', namaMatakuliah: '', dosenPengampu: '', durasiPemakaian: 1 });
 
+  // Reject Modal State
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectBookingId, setRejectBookingId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+
   // Schedule Management State
   const [scheduleEditMode, setScheduleEditMode] = useState(false);
   const [isEditingSchedule, setIsEditingSchedule] = useState(false);
@@ -82,8 +87,8 @@ export default function AdminDashboard() {
 
   const filteredBookings = bookings.filter((b) => filter === 'all' || b.status === filter);
 
-  const handleReview = async (id: string, action: 'approved' | 'rejected') => {
-    const res = await reviewBooking(id, action);
+  const handleReview = async (id: string, action: 'approved' | 'rejected', note?: string) => {
+    const res = await reviewBooking(id, action, note);
     if (res.success) {
       showToast(res.message, 'success');
       setRefreshKey(k => k + 1);
@@ -523,7 +528,7 @@ export default function AdminDashboard() {
 
                   {b.status === 'pending' && (
                     <div className="grid grid-cols-2 gap-3 mt-auto">
-                      <button onClick={() => handleReview(b.id, 'rejected')} className="w-full px-4 py-2.5 rounded-xl font-bold text-[13px] text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 hover:border-rose-300 transition-all active:scale-95">Tolak</button>
+                      <button onClick={() => { setRejectBookingId(b.id); setRejectNote(''); setRejectModalOpen(true); }} className="w-full px-4 py-2.5 rounded-xl font-bold text-[13px] text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 hover:border-rose-300 transition-all active:scale-95">Tolak</button>
                       <button onClick={() => handleReview(b.id, 'approved')} className="w-full px-4 py-2.5 rounded-xl font-bold text-[13px] text-emerald-700 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 hover:border-emerald-400 transition-all active:scale-95 shadow-sm shadow-emerald-500/20">Setujui</button>
                     </div>
                   )}
@@ -1163,6 +1168,49 @@ export default function AdminDashboard() {
                   }}
                 >
                   {pwLoading ? 'Menyimpan...' : 'Simpan Password Baru'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Booking Modal */}
+      {rejectModalOpen && rejectBookingId && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[2000] flex items-center justify-center p-4 sm:p-6 animate-[fadeIn_200ms_ease-out]" onClick={() => setRejectModalOpen(false)}>
+          <div className="bg-white rounded-[24px] shadow-2xl shadow-slate-900/10 w-full max-w-[480px] flex flex-col animate-[slideUp_300ms_ease-out] relative overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-400 to-rose-600" />
+            <div className="flex items-start justify-between px-8 pt-8 pb-5 border-b border-slate-100">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-[20px] font-extrabold text-slate-800 tracking-tight">Tolak Peminjaman</h2>
+                <span className="text-[13px] text-slate-500 font-medium">Beri alasan penolakan (opsional).</span>
+              </div>
+              <button className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-rose-100 hover:text-rose-600 transition-colors shrink-0 outline-none focus:ring-2 focus:ring-rose-200" onClick={() => setRejectModalOpen(false)}>✕</button>
+            </div>
+            <div className="p-8">
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">Komentar Penolakan</label>
+              <textarea
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[14px] focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 outline-none transition-all resize-none mb-6"
+                rows={4}
+                placeholder="misal: Ruangan dipakai untuk kegiatan prodi..."
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+              />
+              <div className="flex gap-3">
+                <button
+                  className="flex-1 px-4 py-2.5 rounded-xl font-bold text-[13px] text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  onClick={() => setRejectModalOpen(false)}
+                >
+                  Batal
+                </button>
+                <button
+                  className="flex-1 px-4 py-2.5 rounded-xl font-bold text-[13px] text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-colors"
+                  onClick={() => {
+                    handleReview(rejectBookingId, 'rejected', rejectNote);
+                    setRejectModalOpen(false);
+                  }}
+                >
+                  Konfirmasi Tolak
                 </button>
               </div>
             </div>

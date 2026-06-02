@@ -452,7 +452,7 @@ export async function loginAdmin(password: string): Promise<ActionResult> {
 
     return {
       success: false,
-      message: `Password salah. Sisa ${attemptsUntilBlock} percobaan sebelum diblokir ${nextCooldown} menit.`
+      message: 'Password salah'
     };
   } catch (error) {
     console.error('Login error:', error);
