@@ -3,9 +3,12 @@ import type { NextRequest } from 'next/server';
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-// Inisialisasi Redis (jika env vars tersedia)
-const redisConfigured = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
-const redis = redisConfigured ? Redis.fromEnv() : null;
+// Inisialisasi Redis (Mendukung env Upstash bawaan ATAU Vercel KV)
+const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+
+const redisConfigured = url && token;
+const redis = redisConfigured ? new Redis({ url, token }) : null;
 
 // Ratelimiter: 3 request per 30 menit
 const ratelimit = redis ? new Ratelimit({
