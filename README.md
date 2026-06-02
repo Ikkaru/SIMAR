@@ -32,35 +32,99 @@ Pusat kendali komprehensif dengan sistem keamanan ketat bagi staf administrasi:
 - **Manajemen Pengumuman**: Sistem pengelolaan spanduk informasi global.
 - **Otomatisasi Sistem**: *Cleanup* otomatis untuk mereset riwayat peminjaman setiap akhir pekan.
 
-## Panduan Instalasi & Deployment
+## 🚀 Panduan Instalasi & Deployment
 
-SIMAR mendukung eksekusi di lingkungan *Serverless* (Vercel) maupun lingkungan terisolasi berbasis Docker.
+SIMAR dirancang untuk mudah di-*deploy* di berbagai lingkungan, baik menggunakan *Serverless Platform* (seperti Vercel) maupun menggunakan container Docker (untuk VPS atau server mandiri).
 
-### Prasyarat
-- Node.js versi 18+ (Untuk lingkungan Non-Docker)
-- PostgreSQL
+### 📋 Prasyarat Sistem
+Sebelum memulai instalasi, pastikan sistem Anda telah memiliki:
+1. **Node.js** (Versi 18.x atau 20.x ke atas) — *Jika tidak menggunakan Docker.*
+2. **Git** — Untuk melakukan kloning repositori.
+3. **Database PostgreSQL** — Direkomendasikan menggunakan layanan cloud seperti [Neon.tech](https://neon.tech/) atau Supabase, atau bisa juga menggunakan instance lokal.
+4. **Docker & Docker Compose** (Opsional) — *Hanya jika Anda ingin menggunakan opsi deployment Docker.*
 
-### Instalasi Lokal
+---
+
+### 💻 Tahap 1: Persiapan Repositori (Instalasi Lokal)
+
+1. **Kloning repositori** ke dalam komputer/server Anda:
+   ```bash
+   git clone https://github.com/Ikkaru/SIMAR.git
+   cd SIMAR
+   ```
+
+2. **Instalasi *dependencies*** menggunakan npm:
+   ```bash
+   npm install
+   ```
+
+3. **Buat file konfigurasi *environment*** dengan menyalin dari file *template*:
+   ```bash
+   cp .env.example .env.local
+   ```
+   *(Catatan: Jika Anda menggunakan Windows CMD/PowerShell, Anda bisa membuat file `.env.local` secara manual dan salin isi dari `.env.example` ke dalamnya).*
+
+---
+
+### 🔑 Tahap 2: Konfigurasi Environment Variables
+
+Buka file `.env.local` yang baru saja dibuat, lalu sesuaikan parameter wajib berikut:
+
+- `DATABASE_URL`
+  URL koneksi langsung ke database PostgreSQL Anda. Pastikan formatnya sudah benar.
+  *Contoh: `postgresql://user:password@localhost:5432/simar_db?schema=public`*
+
+- `ADMIN_PASSWORD_HASH`
+  Karena alasan keamanan, kata sandi *default* administrator tidak disimpan dalam teks biasa. Anda harus melakukan *hashing* menggunakan `bcrypt`. Gunakan *online bcrypt generator* untuk mengubah kata sandi yang Anda inginkan (misal: "admin123") menjadi teks hash, lalu tempelkan (*paste*) nilai tersebut ke variabel ini.
+
+- `CRON_SECRET`
+  Kunci rahasia sembarang (berupa teks alfanumerik acak panjang) yang akan digunakan untuk mengamankan *endpoint* eksekusi pembersihan jadwal otomatis mingguan.
+
+---
+
+### 🗄️ Tahap 3: Menyiapkan Database
+
+Jika Anda **tidak menggunakan Docker**, Anda wajib menyinkronkan struktur database ke PostgreSQL sebelum menyalakan server:
+
+1. **Generate Prisma Client** agar tipe data TypeScript terbuat sesuai skema:
+   ```bash
+   npx prisma generate
+   ```
+
+2. **Push skema tabel ke dalam database**:
+   ```bash
+   npx prisma db push
+   ```
+   *Perhatian: Perintah ini akan membuat semua tabel yang dibutuhkan secara otomatis pada database kosong Anda.*
+
+---
+
+### 🌐 Tahap 4: Menjalankan Server
+
+Setelah semua tahap persiapan di atas selesai, Anda siap menjalankan aplikasi!
+
+#### A. Menjalankan di Lingkungan Development (Lokal)
 ```bash
-git clone https://github.com/Ikkaru/SIMAR.git
-cd SIMAR
-npm install
-cp .env.example .env.local
+npm run dev
 ```
-Sesuaikan parameter krusial di `.env.local`:
-- `DATABASE_URL`: URI koneksi PostgreSQL.
-- `ADMIN_PASSWORD_HASH`: Hash bcrypt untuk kata sandi administrator awal.
-- `CRON_SECRET`: Kunci otorisasi untuk eksekusi API *cron job*.
+Aplikasi sekarang dapat diakses melalui `http://localhost:3000`.
 
-### Sinkronisasi Skema Database (Non-Docker)
+#### B. Deployment ke Vercel (Rekomendasi Utama)
+Vercel adalah *platform* yang paling ideal karena akan secara otomatis membaca dan menjalankan Vercel Cron Jobs (`vercel.json`) tanpa perlu penyetelan tambahan.
+1. Masuk ke *Dashboard* Vercel dan buat *Project* baru dari repositori GitHub Anda.
+2. Pada bagian *Environment Variables*, masukkan ketiga kunci wajib di atas (`DATABASE_URL`, `ADMIN_PASSWORD_HASH`, `CRON_SECRET`).
+3. Tekan **Deploy** dan Vercel akan mengurus sisanya.
+
+#### C. Deployment menggunakan Docker Compose (VPS / Self-Hosted)
+Pilihan tepat jika Anda ingin menjalankan aplikasi di server Linux/VPS mandiri secara terisolasi. Kelebihannya, skrip sinkronisasi database dijalankan otomatis saat kontainer dihidupkan (*zero-setup*).
 ```bash
-npx prisma generate
-npx prisma db push
+docker-compose up -d --build
 ```
-
-### Opsi Deployment
-- **Vercel (Direkomendasikan)**: Impor repositori ke Vercel dan atur variabel *environment*. Eksekusi tugas berkala (*cron job*) mingguan diatur secara otomatis melalui `vercel.json`.
-- **Docker Compose**: Jalankan `docker-compose up -d --build`. Skrip sinkronisasi database dijalankan otomatis saat kontainer dihidupkan. Fitur *cron job* perlu dipanggil menggunakan eksekutor terpisah seperti *Linux cron* dengan header otorisasi yang sesuai.
+> **Penting untuk Docker Deployment**: 
+> Fitur *Vercel Cron* tidak akan bekerja di luar ekosistem Vercel. Anda harus mengatur eksekutor jadwal tambahan (contohnya *Crontab* di Linux) agar berjalan tiap hari Sabtu pukul 01:00 pagi. Berikut adalah contoh sintaks crontab:
+> ```bash
+> 0 1 * * 6 curl -X GET -H "Authorization: Bearer <ISI_DENGAN_CRON_SECRET_ANDA>" https://domain-simar-anda.com/api/cron/reset-weekly
+> ```
 
 ## Panduan Pengembangan (Developer Guide)
 
