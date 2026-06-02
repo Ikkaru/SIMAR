@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Day, SessionNumber, RoomName, getSessionTimes } from '@/lib/types';
+import { Day, SessionNumber, RoomName, getSessionTimes, getTodayDay } from '@/lib/types';
 import DaySelector from '@/components/DaySelector';
 import ScheduleTable, { SlotDisplayData } from '@/components/ScheduleTable';
 import BookingModal from '@/components/BookingModal';
 
 export default function Home() {
-  const [selectedDay, setSelectedDay] = useState<Day>('Senin');
+  const [selectedDay, setSelectedDay] = useState<Day>(getTodayDay());
   const [refreshKey, setRefreshKey] = useState(0);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   

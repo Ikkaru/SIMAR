@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { BookingRequest, BookingStatus, Day, SessionNumber, RoomName, DAYS, getSessionTimes, getWeekDates } from '@/lib/types';
+import { BookingRequest, BookingStatus, Day, SessionNumber, RoomName, DAYS, getSessionTimes, getWeekDates, getTodayDay } from '@/lib/types';
 import { 
   fetchAllBookings, fetchBookingStats, reviewBooking, logoutAdmin,
   toggleSlotLock, removeBooking, updateBooking, fetchRoomStats,
@@ -23,7 +23,7 @@ export default function AdminDashboard() {
   
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   
-  const [selectedDay, setSelectedDay] = useState<Day>('Senin');
+  const [selectedDay, setSelectedDay] = useState<Day>(getTodayDay());
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [dates, setDates] = useState<Record<Day, { dateObj: Date; formatted: string }> | null>(null);

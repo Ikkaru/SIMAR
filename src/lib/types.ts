@@ -183,3 +183,16 @@ export function isDayPast(dayName: Day): boolean {
   return now.getTime() > targetDateObj.getTime();
 }
 
+/** Helper: Mendapatkan hari aktif saat ini (default Senin jika weekend) */
+export function getTodayDay(): Day {
+  const dayIndex = new Date().getDay(); // 0=Minggu, 1=Senin, ..., 6=Sabtu
+  const dayMap: Record<number, Day> = {
+    1: 'Senin',
+    2: 'Selasa',
+    3: 'Rabu',
+    4: 'Kamis',
+    5: 'Jumat',
+  };
+  return dayMap[dayIndex] || 'Senin'; // Weekend → default Senin
+}
+

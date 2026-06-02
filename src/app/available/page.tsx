@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Day, SessionNumber, RoomName, DAYS, isDayPast } from '@/lib/types';
+import { Day, SessionNumber, RoomName, DAYS, isDayPast, getTodayDay } from '@/lib/types';
 import { getAvailableRoomsSummary } from '@/lib/actions';
 import BookingModal from '@/components/BookingModal';
 import DaySelector from '@/components/DaySelector';
@@ -12,7 +12,7 @@ export default function AvailableRoomsPage() {
   const [data, setData] = useState<AvailableData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [selectedDay, setSelectedDay] = useState<Day>('Senin');
+  const [selectedDay, setSelectedDay] = useState<Day>(getTodayDay());
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   
   // Booking Modal State
@@ -35,11 +35,6 @@ export default function AvailableRoomsPage() {
 
   useEffect(() => {
     load();
-    // Auto-select first non-past day
-    const firstAvailable = DAYS.find(d => !isDayPast(d));
-    if (firstAvailable) {
-      setSelectedDay(firstAvailable);
-    }
   }, []);
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
