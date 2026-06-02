@@ -17,8 +17,58 @@ import { prisma } from './prisma';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { verifyAdminSession as verifyAdmin, requireAdmin } from './auth-guard';
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 
 export { verifyAdmin, requireAdmin };
+
+const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+const redisConfigured = url && token;
+const redis = redisConfigured ? new Redis({ url, token }) : null;
+
+const ratelimit = redis ? new Ratelimit({
+  redis: redis,
+  limiter: Ratelimit.slidingWindow(3, "30 m"),
+  analytics: true,
+}) : null;
+
+const BAN_PREFIX = "banned_ip:";
+const FAILED_ATTEMPT_PREFIX = "failed_attempts:";
+
+async function checkRateLimit(): Promise<ActionResult<any> | null> {
+  if (!redis || !ratelimit) return null;
+  const headerList = await headers();
+  const ip = headerList.get('x-forwarded-for')?.split(',')[0]?.trim() || headerList.get('x-real-ip') || "127.0.0.1";
+
+  try {
+    const isBanned = await redis.get(`${BAN_PREFIX}${ip}`);
+    if (isBanned) {
+      return { success: false, message: "Akses diblokir sementara karena aktivitas mencurigakan. Silakan coba lagi dalam 10 jam." };
+    }
+
+    const { success } = await ratelimit.limit(`ratelimit_${ip}`);
+
+    if (!success) {
+      const failedAttemptsKey = `${FAILED_ATTEMPT_PREFIX}${ip}`;
+      const failedAttempts = await redis.incr(failedAttemptsKey);
+      
+      if (failedAttempts === 1) {
+        await redis.expire(failedAttemptsKey, 1800);
+      }
+
+      if (failedAttempts > 3) {
+        await redis.setex(`${BAN_PREFIX}${ip}`, 36000, "banned");
+        return { success: false, message: "Akses diblokir sementara karena aktivitas mencurigakan. Silakan coba lagi dalam 10 jam." };
+      }
+
+      return { success: false, message: "Terlalu banyak request. Harap tunggu 30 menit sebelum mencoba lagi." };
+    }
+  } catch (error) {
+    console.error("Rate Limit Error:", error);
+  }
+  return null;
+}
 
 interface ActionResult<T = unknown> {
   success: boolean;
@@ -41,6 +91,9 @@ export async function submitBooking(
   formData: BookingFormData
 ): Promise<ActionResult<BookingRequest>> {
   try {
+    const rlCheck = await checkRateLimit();
+    if (rlCheck) return rlCheck;
+
     const parseResult = bookingSchema.safeParse(formData);
     if (!parseResult.success) {
       return { success: false, message: parseResult.error.issues[0].message };
@@ -365,6 +418,9 @@ function getCooldownMinutes(attempts: number): number {
 
 export async function loginAdmin(password: string): Promise<ActionResult> {
   try {
+    const rlCheck = await checkRateLimit();
+    if (rlCheck) return rlCheck;
+
     // 1. Deteksi IP address
     const headerList = await headers();
     const ip = headerList.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';

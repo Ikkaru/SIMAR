@@ -1,24 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
 
-// Inisialisasi Redis (Mendukung env Upstash bawaan ATAU Vercel KV)
-const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-
-const redisConfigured = url && token;
-const redis = redisConfigured ? new Redis({ url, token }) : null;
-
-// Ratelimiter: 3 request per 30 menit
-const ratelimit = redis ? new Ratelimit({
-  redis: redis,
-  limiter: Ratelimit.slidingWindow(3, "30 m"),
-  analytics: true,
-}) : null;
-
-const BAN_PREFIX = "banned_ip:";
-const FAILED_ATTEMPT_PREFIX = "failed_attempts:";
 
 /**
  * Middleware untuk melindungi route admin.
@@ -30,54 +12,7 @@ const FAILED_ATTEMPT_PREFIX = "failed_attempts:";
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ==== RATE LIMIT LOGIC ====
-  if (request.method === "POST" && redis && ratelimit) {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ?? request.headers.get('x-real-ip') ?? "127.0.0.1";
-    
-    try {
-      const isBanned = await redis.get(`${BAN_PREFIX}${ip}`);
-      if (isBanned) {
-        return NextResponse.json(
-          { success: false, message: "Akses diblokir sementara karena aktivitas mencurigakan. Silakan coba lagi dalam 10 jam." },
-          { status: 429 }
-        );
-      }
 
-      const { success, limit, reset, remaining } = await ratelimit.limit(`ratelimit_${ip}`);
-
-      if (!success) {
-        const failedAttemptsKey = `${FAILED_ATTEMPT_PREFIX}${ip}`;
-        const failedAttempts = await redis.incr(failedAttemptsKey);
-        
-        if (failedAttempts === 1) {
-          await redis.expire(failedAttemptsKey, 1800);
-        }
-
-        if (failedAttempts > 3) {
-          await redis.setex(`${BAN_PREFIX}${ip}`, 36000, "banned");
-          return NextResponse.json(
-            { success: false, message: "Akses diblokir sementara karena aktivitas mencurigakan. Silakan coba lagi dalam 10 jam." },
-            { status: 429 }
-          );
-        }
-
-        return NextResponse.json(
-          { success: false, message: "Terlalu banyak request. Harap tunggu beberapa saat sebelum mencoba lagi." },
-          { 
-            status: 429, 
-            headers: {
-              'X-RateLimit-Limit': limit.toString(),
-              'X-RateLimit-Remaining': remaining.toString(),
-              'X-RateLimit-Reset': reset.toString()
-            }
-          }
-        );
-      }
-    } catch (error) {
-      console.error("Rate Limit Error:", error);
-    }
-  }
-  // ==== END RATE LIMIT LOGIC ====
 
   // Protect admin API routes (jika ada di masa depan)
   // Halaman /admin sendiri sudah di-protect di page level via verifyAdmin()
