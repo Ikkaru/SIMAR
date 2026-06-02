@@ -1,88 +1,71 @@
 # SIMAR — Sistem Informasi Manajemen dan Booking Ruangan
 
-SIMAR adalah sistem informasi terpadu untuk digitalisasi jadwal dan peminjaman ruangan perkuliahan. Sistem ini dirancang untuk mencegah bentrok jadwal, meningkatkan transparansi fasilitas, dan menyederhanakan administrasi operasional program studi.
+SIMAR adalah sistem manajemen jadwal dan peminjaman ruangan perkuliahan terpadu yang dirancang untuk mendigitalisasi proses akademik, meminimalisasi bentrok jadwal, serta mempermudah administrasi operasional program studi.
 
-## ⚙️ Arsitektur & Teknologi
+## Arsitektur & Teknologi
 
-- **Frontend & Backend**: Next.js 15 (App Router) dengan bahasa pemrograman TypeScript 5.
-- **Database & ORM**: PostgreSQL (direkomendasikan via Neon) yang dikelola melalui Prisma.
-- **Tampilan (UI/UX)**: Tailwind CSS v4.
-- **Keamanan**: Autentikasi sesi berbasis database, enkripsi *password* dengan `bcrypt`, dan mekanisme proteksi *Brute-Force*.
-- **Otomatisasi**: Vercel Cron Jobs untuk pemeliharaan rutin.
+Sistem ini dibangun menggunakan arsitektur modern untuk menjamin performa dan fleksibilitas *deployment*:
 
----
+- **Framework**: Next.js 15 (App Router)
+- **Bahasa Pemrograman**: TypeScript 5
+- **Database**: PostgreSQL (direkomendasikan via Neon Database)
+- **ORM**: Prisma
+- **UI/UX**: Tailwind CSS v4
+- **Keamanan**: Autentikasi sesi kustom, enkripsi `bcrypt`, dan proteksi *Brute-Force*
+- **Otomatisasi**: Vercel Cron Jobs untuk pemeliharaan rutin mingguan
 
-## 🔄 Alur Kerja Sistem (System Workflow)
+## Fungsionalitas Utama
 
-### 1. Alur Peminjaman (Pengguna Umum)
-1. **Cek Ketersediaan**: Pengguna mengakses papan jadwal interaktif untuk melihat slot yang kosong (berwarna abu-abu).
-2. **Pengajuan Peminjaman**: Pengguna mengklik slot tersebut dan mengisi formulir peminjaman. Sistem akan memvalidasi ketersediaan secara *real-time*.
-3. **Pelacakan Status**: Peminjam dapat melacak status pengajuan (*Pending*, *Approved*, atau *Rejected*) di menu "Cek Status" menggunakan ID Booking atau NIM.
+### 1. Portal Publik (Mahasiswa & Civitas Akademika)
+Fokus pada transparansi dan kemudahan akses informasi ketersediaan ruangan:
+- **Papan Jadwal Interaktif**: Matriks jadwal ruangan dan sesi waktu standar yang menyesuaikan otomatis dengan hari aktif.
+- **Pengajuan Peminjaman**: Formulir peminjaman mandiri pada slot yang berstatus tersedia.
+- **Ketersediaan Ruangan**: Algoritma pencarian cepat untuk memetakan ruangan kosong di seluruh kampus.
+- **Pelacakan Status**: Pemantauan status persetujuan peminjaman secara *real-time* berbasis ID Booking atau NIM.
 
-### 2. Alur Tata Usaha (Administrator)
-1. **Tinjauan Dashboard**: Admin memantau seluruh permintaan yang masuk serta metrik utilisasi ruangan.
-2. **Eksekusi Keputusan**:
-   - **Setujui (Approve)**: Jadwal ruangan dikunci untuk peminjam terkait.
-   - **Tolak (Reject)**: Admin menolak dengan menyertakan catatan/alasan penolakan (opsional).
-   - **Edit**: Admin memperbaiki data peminjam secara langsung jika terdapat kesalahan penulisan.
-3. **Manajemen Lanjutan**: Admin berhak menambahkan jadwal kuliah tetap, menutup/mengunci ruangan yang sedang direnovasi, serta memublikasikan pengumuman sistem.
+### 2. Portal Administrator
+Pusat kendali komprehensif dengan sistem keamanan ketat bagi staf administrasi:
+- **Dashboard Statistik**: Metrik utilisasi ruangan dan status pengajuan secara agregat.
+- **Manajemen Peminjaman**: Alur kerja persetujuan (Setujui, Tolak dengan catatan, atau Edit data).
+- **Manajemen Jadwal Resmi**: *CRUD operations* jadwal tetap dan integrasi sinkronisasi otomatis ke sistem informasi kampus (SIGenerate).
+- **Sistem Kunci (Locking System)**: Penutupan peminjaman untuk sesi spesifik maupun penguncian ruangan secara penuh.
+- **Manajemen Pengumuman**: Sistem pengelolaan spanduk informasi global.
+- **Otomatisasi Sistem**: *Cleanup* otomatis untuk mereset riwayat peminjaman setiap akhir pekan.
 
----
+## Panduan Instalasi & Deployment
 
-## 🚀 Panduan Instalasi & Deployment
+SIMAR mendukung eksekusi di lingkungan *Serverless* (Vercel) maupun lingkungan terisolasi berbasis Docker.
 
-SIMAR dirancang untuk di-*deploy* secara fleksibel, baik di *Serverless Platform* (Vercel) maupun menggunakan *container* Docker (VPS/Server Mandiri).
+### Prasyarat
+- Node.js versi 18+ (Untuk lingkungan Non-Docker)
+- PostgreSQL
 
-### 📋 Prasyarat Sistem
-1. **Node.js** (Versi 18.x atau 20.x ke atas) — *Jika tidak menggunakan Docker.*
-2. **Database PostgreSQL** — Gunakan layanan cloud ([Neon.tech](https://neon.tech/)) atau *instance* lokal.
-3. **Git** — Untuk mengkloning repositori.
+### Instalasi Lokal
+```bash
+git clone https://github.com/Ikkaru/SIMAR.git
+cd SIMAR
+npm install
+cp .env.example .env.local
+```
+Sesuaikan parameter krusial di `.env.local`:
+- `DATABASE_URL`: URI koneksi PostgreSQL.
+- `ADMIN_PASSWORD_HASH`: Hash bcrypt untuk kata sandi administrator awal.
+- `CRON_SECRET`: Kunci otorisasi untuk eksekusi API *cron job*.
 
-### 💻 Tahap 1: Persiapan Repositori (Instalasi Lokal)
-1. **Kloning repositori** dan masuk ke direktori:
-   ```bash
-   git clone https://github.com/Ikkaru/SIMAR.git
-   cd SIMAR
-   ```
-2. **Instalasi *dependencies***:
-   ```bash
-   npm install
-   ```
-3. **Buat file *environment***:
-   ```bash
-   cp .env.example .env.local
-   ```
-
-### 🔑 Tahap 2: Konfigurasi Environment Variables
-Buka `.env.local` dan atur parameter berikut:
-- `DATABASE_URL`: URI koneksi langsung ke PostgreSQL Anda.
-- `ADMIN_PASSWORD_HASH`: Teks *hash* bcrypt dari kata sandi admin yang Anda inginkan (gunakan *online bcrypt generator*).
-- `CRON_SECRET`: Teks rahasia acak untuk melindungi *endpoint* otomatisasi.
-
-### 🗄️ Tahap 3: Menyiapkan Database (Non-Docker)
-Eksekusi perintah berikut untuk menyinkronkan skema ke database PostgreSQL Anda:
+### Sinkronisasi Skema Database (Non-Docker)
 ```bash
 npx prisma generate
 npx prisma db push
 ```
 
-### 🌐 Tahap 4: Deployment
-- **Lingkungan Development (Lokal)**:
-  Jalankan `npm run dev` dan buka `http://localhost:3000`.
-- **Vercel (Rekomendasi Utama)**:
-  Impor repositori ke Vercel dan tambahkan *Environment Variables*. Eksekusi tugas mingguan (*cron job*) diatur otomatis melalui `vercel.json`.
-- **Docker Compose (VPS / Self-Hosted)**:
-  Jalankan `docker-compose up -d --build`. Skema database akan tersinkronisasi otomatis saat *container* hidup. *Catatan: Anda harus mengatur scheduler (seperti Linux Crontab) secara manual untuk mengeksekusi fitur Cron mingguan.*
+### Opsi Deployment
+- **Vercel (Direkomendasikan)**: Impor repositori ke Vercel dan atur variabel *environment*. Eksekusi tugas berkala (*cron job*) mingguan diatur secara otomatis melalui `vercel.json`.
+- **Docker Compose**: Jalankan `docker-compose up -d --build`. Skrip sinkronisasi database dijalankan otomatis saat kontainer dihidupkan. Fitur *cron job* perlu dipanggil menggunakan eksekutor terpisah seperti *Linux cron* dengan header otorisasi yang sesuai.
 
----
+## Panduan Pengembangan (Developer Guide)
 
-## 👨‍💻 Panduan Pengembangan (Developer Guide)
-
-Panduan teknis bagi *engineer* untuk mengelola atau memperluas fungsionalitas SIMAR:
-
-1. **Modifikasi Skema Database**: Tambahkan model baru di `prisma/schema.prisma` $\rightarrow$ Terapkan perubahan dengan `npx prisma db push`.
-2. **Penulisan Logika (Backend)**:
-   - Akses data sederhana ditempatkan di `src/lib/store.ts`.
-   - Mutasi data kompleks (dengan autentikasi/validasi berlapis) wajib dienkapsulasi sebagai *Server Actions* di `src/lib/actions.ts`.
-3. **Pengembangan Antarmuka (UI)**: Semua komponen React dikelola di `src/components/`. Gunakan *utility classes* Tailwind CSS untuk manipulasi desain.
-4. **Penambahan Halaman (Routing)**: Buat direktori baru di dalam `src/app/` dan tambahkan file `page.tsx` (mengikuti standar arsitektur Next.js App Router).
+Panduan teknis bagi insinyur perangkat lunak untuk mengelola atau menambah fitur:
+- **Perubahan Database**: Model dikelola dalam `prisma/schema.prisma`. Gunakan `npx prisma db push` untuk merefleksikan perubahan.
+- **Logika Backend**: Akses database sederhana dilakukan melalui `src/lib/store.ts`. Operasi mutasi data yang kompleks wajib ditempatkan dalam *Server Actions* (`src/lib/actions.ts`).
+- **Antarmuka (UI)**: Komponen React tersentralisasi di `src/components/`. 
+- **Routing**: Semua konfigurasi halaman berbasis Next.js App Router yang terletak pada `src/app/`.
