@@ -10,7 +10,7 @@ import {
   addBooking, getAllBookings, getBookingsByStatus,
   isSlotBooked, updateBookingStatus, getBookingStats,
   getBookingsForSlot, isSlotLocked, lockSlot, unlockSlot,
-  deleteBooking, editBooking, getBookingById, getRoomUsageStats, deleteAllBookings,
+  deleteBooking, editBooking, getBookingById, getRoomUsageStats, deleteAllBookings, deletePendingBookings,
 } from './store';
 import { cookies, headers } from 'next/headers';
 import { prisma } from './prisma';
@@ -578,15 +578,15 @@ export async function changeAdminPassword(
   }
 }
 
-export async function resetWeeklyBookings(): Promise<ActionResult> {
+export async function resetWeeklyBookings(type: 'all' | 'pending' = 'all'): Promise<ActionResult> {
   try {
     await requireAdmin();
-    const ok = await deleteAllBookings();
+    const ok = type === 'all' ? await deleteAllBookings() : await deletePendingBookings();
     if (!ok) return { success: false, message: 'Gagal menghapus riwayat peminjaman.' };
     
     const { revalidatePath } = await import('next/cache');
     revalidatePath('/');
-    return { success: true, message: 'Semua riwayat booking berhasil dihapus untuk memulai minggu baru.' };
+    return { success: true, message: type === 'all' ? 'Semua riwayat booking berhasil dihapus.' : 'Semua request pending berhasil dihapus.' };
   } catch (error) {
     console.error('resetWeeklyBookings error:', error);
     return { success: false, message: 'Gagal membersihkan riwayat.' };

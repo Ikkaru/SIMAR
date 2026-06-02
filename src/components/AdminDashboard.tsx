@@ -122,10 +122,10 @@ export default function AdminDashboard() {
     setClearHistoryModalOpen(true);
   };
 
-  const executeClearHistory = async () => {
+  const executeClearHistory = async (type: 'all' | 'pending') => {
     setIsLoading(true);
     const { resetWeeklyBookings } = await import('@/lib/actions');
-    const res = await resetWeeklyBookings();
+    const res = await resetWeeklyBookings(type);
     if (res.success) {
       showToast(res.message, 'success');
       setClearHistoryModalOpen(false);
@@ -366,8 +366,9 @@ export default function AdminDashboard() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
             Sinkronkan SIGenerate
           </button>
-          <button onClick={handleClearHistory} className="px-5 py-2.5 rounded-xl font-bold text-[14px] text-white bg-rose-600 border border-rose-700 hover:bg-rose-700 hover:shadow-lg hover:shadow-rose-600/20 transition-all outline-none focus:ring-2 focus:ring-rose-300">
-            Reset Mingguan
+          <button onClick={handleClearHistory} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-[14px] text-white bg-rose-600 border border-rose-700 hover:bg-rose-700 hover:shadow-lg hover:shadow-rose-600/20 transition-all outline-none focus:ring-2 focus:ring-rose-300">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            Reset Request
           </button>
           <button onClick={() => setChangePwModalOpen(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-[14px] text-slate-700 bg-slate-100 border border-slate-200 hover:bg-slate-200 hover:border-slate-300 transition-all outline-none focus:ring-2 focus:ring-slate-300">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -1024,17 +1025,20 @@ export default function AdminDashboard() {
               <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-6">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
               </div>
-              <h2 className="text-[22px] font-extrabold text-slate-800 tracking-tight mb-2">Reset Pemesanan Mingguan?</h2>
+              <h2 className="text-[22px] font-extrabold text-slate-800 tracking-tight mb-2">Reset Request Pemesanan</h2>
               <p className="text-[14px] text-slate-500 leading-relaxed mb-8 px-4">
-                Aksi ini akan menghapus permanen <strong>seluruh</strong> riwayat peminjaman (termasuk yang Pending, Disetujui, maupun Ditolak) untuk mengosongkan jadwal minggu ini.
+                Pilih aksi yang ingin Anda lakukan. Menghapus semua riwayat bersifat <strong>permanen</strong> dan tidak dapat dibatalkan.
               </p>
               
-              <div className="flex gap-3 w-full">
-                <button className="flex-1 px-4 py-3 rounded-xl font-bold text-[14px] text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors" onClick={() => setClearHistoryModalOpen(false)}>
-                  Batal
+              <div className="flex flex-col gap-3 w-full">
+                <button className="w-full px-4 py-3 rounded-xl font-bold text-[14px] text-amber-700 bg-amber-100 border border-amber-200 hover:bg-amber-200 transition-colors shadow-sm disabled:opacity-50" onClick={() => executeClearHistory('pending')} disabled={isLoading}>
+                  {isLoading ? 'Memproses...' : 'Hapus Hanya Request Pending'}
                 </button>
-                <button className="flex-1 px-4 py-3 rounded-xl font-bold text-[14px] text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-md shadow-rose-600/20 disabled:opacity-50" onClick={executeClearHistory} disabled={isLoading}>
-                  {isLoading ? 'Menghapus...' : 'Ya, Hapus Semua'}
+                <button className="w-full px-4 py-3 rounded-xl font-bold text-[14px] text-white bg-rose-600 border border-rose-700 hover:bg-rose-700 transition-colors shadow-md shadow-rose-600/20 disabled:opacity-50" onClick={() => executeClearHistory('all')} disabled={isLoading}>
+                  {isLoading ? 'Memproses...' : 'Ya, Hapus SEMUA Riwayat'}
+                </button>
+                <button className="w-full px-4 py-3 rounded-xl font-bold text-[14px] text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors mt-2" onClick={() => setClearHistoryModalOpen(false)}>
+                  Batal
                 </button>
               </div>
             </div>

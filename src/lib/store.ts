@@ -195,6 +195,17 @@ export async function deleteAllBookings(): Promise<boolean> {
   }
 }
 
+export async function deletePendingBookings(): Promise<boolean> {
+  try {
+    await prisma.booking.deleteMany({
+      where: { status: 'pending' }
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function getBookingStats(): Promise<{
   total: number; pending: number; approved: number; rejected: number;
 }> {
