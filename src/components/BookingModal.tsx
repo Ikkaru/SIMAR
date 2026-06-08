@@ -140,7 +140,7 @@ export default function BookingModal({
                 id="namaMatakuliah"
                 name="namaMatakuliah"
                 className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl text-[14px] text-slate-800 placeholder-slate-400 focus:bg-white focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all disabled:opacity-50"
-                placeholder="Misal: Rapat Himpunan, Pengganti Kuliah AI"
+                placeholder="Misal: Pengganti Matakuliah Aljabar linear (B)"
                 value={formData.namaMatakuliah}
                 onChange={handleChange}
                 required
