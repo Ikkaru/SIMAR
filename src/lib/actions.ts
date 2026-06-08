@@ -29,7 +29,7 @@ const redis = redisConfigured ? new Redis({ url, token }) : null;
 
 const ratelimit = redis ? new Ratelimit({
   redis: redis,
-  limiter: Ratelimit.slidingWindow(3, "30 m"),
+  limiter: Ratelimit.slidingWindow(3, "10 m"),
   analytics: true,
 }) : null;
 
@@ -73,15 +73,17 @@ async function checkRateLimit(): Promise<ActionResult<any> | null> {
       const failedAttempts = await redis.incr(failedAttemptsKey);
       
       if (failedAttempts === 1) {
-        await redis.expire(failedAttemptsKey, 1800);
+        // Hitung spam dalam jendela waktu 5 menit (300 detik)
+        await redis.expire(failedAttemptsKey, 300);
       }
 
-      if (failedAttempts > 3) {
+      // 3 request sukses + 7 request gagal = 10 request total baru diblokir 10 jam
+      if (failedAttempts > 7) {
         await redis.setex(`${BAN_PREFIX}${deviceId}`, 36000, "banned");
         return { success: false, message: "Akses diblokir sementara karena aktivitas mencurigakan. Silakan coba lagi dalam 10 jam." };
       }
 
-      return { success: false, message: "Terlalu banyak request. Harap tunggu 30 menit sebelum mencoba lagi." };
+      return { success: false, message: "Terlalu banyak request. Harap tunggu 10 menit sebelum mencoba lagi." };
     }
   } catch (error) {
     console.error("Rate Limit Error:", error);

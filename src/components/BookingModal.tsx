@@ -79,6 +79,13 @@ export default function BookingModal({
         </div>
 
         <div className="p-8 overflow-y-auto">
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-xl text-[13.5px] text-rose-600 font-bold flex items-start gap-3 shadow-sm shadow-rose-100/50">
+              <svg className="shrink-0 mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>{error}</span>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-4 px-5 py-4 bg-gradient-to-br from-sky-50 to-blue-50/50 rounded-2xl border border-sky-100 mb-8">
             <div className="flex flex-col gap-1 flex-1">
               <span className="text-[10px] font-bold uppercase tracking-widest text-sky-600">Ruangan</span>
@@ -189,12 +196,6 @@ export default function BookingModal({
               </div>
             </div>
 
-            {error && (
-              <div className="mt-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-[13px] text-rose-600 font-semibold flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                {error}
-              </div>
-            )}
           </form>
         </div>
 
