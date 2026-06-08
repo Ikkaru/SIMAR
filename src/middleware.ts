@@ -9,7 +9,7 @@ import type { NextRequest } from 'next/server';
  * Catatan: Middleware ini hanya cek keberadaan cookie (lightweight).
  * Validasi session token yang lebih mendalam dilakukan di server actions via requireAdmin().
  */
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
 

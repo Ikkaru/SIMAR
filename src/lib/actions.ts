@@ -33,8 +33,8 @@ const ratelimit = redis ? new Ratelimit({
   analytics: true,
 }) : null;
 
-const BAN_PREFIX = "banned_ip:";
-const FAILED_ATTEMPT_PREFIX = "failed_attempts:";
+const BAN_PREFIX = "banned_device:";
+const FAILED_ATTEMPT_PREFIX = "failed_attempts_device:";
 
 async function checkRateLimit(): Promise<ActionResult<any> | null> {
   // Pengecualian untuk Admin: Bebas dari rate limit
@@ -46,19 +46,30 @@ async function checkRateLimit(): Promise<ActionResult<any> | null> {
   }
 
   if (!redis || !ratelimit) return null;
-  const headerList = await headers();
-  const ip = headerList.get('x-forwarded-for')?.split(',')[0]?.trim() || headerList.get('x-real-ip') || "127.0.0.1";
+
+  // Deteksi atau buat Device ID
+  let deviceId = cookieStore.get('device_id')?.value;
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    cookieStore.set('device_id', deviceId, {
+      httpOnly: true,
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365, // 1 tahun
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    });
+  }
 
   try {
-    const isBanned = await redis.get(`${BAN_PREFIX}${ip}`);
+    const isBanned = await redis.get(`${BAN_PREFIX}${deviceId}`);
     if (isBanned) {
       return { success: false, message: "Akses diblokir sementara karena aktivitas mencurigakan. Silakan coba lagi dalam 10 jam." };
     }
 
-    const { success } = await ratelimit.limit(`ratelimit_${ip}`);
+    const { success } = await ratelimit.limit(`ratelimit_${deviceId}`);
 
     if (!success) {
-      const failedAttemptsKey = `${FAILED_ATTEMPT_PREFIX}${ip}`;
+      const failedAttemptsKey = `${FAILED_ATTEMPT_PREFIX}${deviceId}`;
       const failedAttempts = await redis.incr(failedAttemptsKey);
       
       if (failedAttempts === 1) {
@@ -66,7 +77,7 @@ async function checkRateLimit(): Promise<ActionResult<any> | null> {
       }
 
       if (failedAttempts > 3) {
-        await redis.setex(`${BAN_PREFIX}${ip}`, 36000, "banned");
+        await redis.setex(`${BAN_PREFIX}${deviceId}`, 36000, "banned");
         return { success: false, message: "Akses diblokir sementara karena aktivitas mencurigakan. Silakan coba lagi dalam 10 jam." };
       }
 
@@ -415,9 +426,9 @@ export async function fetchRoomStats(): Promise<
 
 // ─── Auth ────────────────────────────────────────────────────
 
-// Cooldown progresif: setiap kelipatan 3 kali gagal, durasi blokir meningkat
-const COOLDOWN_MINUTES = [1, 2, 5, 15]; // index 0 = gagal 3x, index 1 = gagal 6x, dst.
-const MAX_ATTEMPTS_PER_TIER = 3;
+// Cooldown progresif: setiap kelipatan 15 kali gagal, durasi blokir meningkat
+const COOLDOWN_MINUTES = [5, 15, 30, 60]; // index 0 = gagal 15x, index 1 = gagal 30x, dst.
+const MAX_ATTEMPTS_PER_TIER = 15;
 
 function getCooldownMinutes(attempts: number): number {
   const tierIndex = Math.floor((attempts - 1) / MAX_ATTEMPTS_PER_TIER);
